@@ -1,0 +1,2476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ThermaSense · Smart Climate & Plug Control</title>
+<!--
+  ============================================================================
+  ThermaSense — smart building climate, plug-load & energy-leak dashboard
+  One self-contained file. No internet connection or installation needed.
+
+  HOW TO EDIT
+   1. Building layout, zones, thermostats, plug circuits, holidays & AI rules
+      → edit DEFAULT_CONFIG in the <script> section (search "BUILDING CONFIG").
+      You can also use "Building setup" inside the app, then "Export config"
+      to reuse the same set-up in another building.
+   2. Real sensors / thermostats / smart plugs → replace the functions in
+      section 2 "SENSOR INPUTS" and sendCmd() in section 3.
+      The demo currently simulates all sensors and devices.
+
+  EDITING IN TEXTEDIT (Mac)
+   - TextEdit ▸ Settings ▸ "Open and Save": tick
+     "Display HTML files as HTML code instead of formatted text".
+   - Save with Format ▸ Make Plain Text, keep the ".html" extension.
+   - Double-click the file to open it in your browser.
+  ============================================================================
+-->
+<style>
+:root{
+  --bg:#f3f5f7; --panel:#fff; --ink:#16202b; --muted:#667281; --line:#e2e7ed;
+  --accent:#0e7c72; --accent-2:#e3f3f1; --bad:#c2410c; --bad-bg:#fff0e8; --blue:#1d4ed8; --blue-bg:#e8f1ff;
+  --violet:#6d28d9; --violet-bg:#f3efff;
+  --r:14px; --shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button{font:inherit;color:inherit;cursor:pointer}
+.muted{color:var(--muted)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+/* ---------- Top bar ---------- */
+.topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:10px 20px;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+@media(max-width:700px){.topbar{position:static}}
+.brand{display:flex;gap:10px;align-items:center}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#0e7c72,#2dd4bf);display:grid;place-items:center;color:#fff}
+.app{font-weight:700;letter-spacing:-.01em;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bname{color:var(--muted);font-size:12.5px}
+.clockbox{display:flex;align-items:center;gap:10px}
+.clock{font:600 26px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.clockmeta{display:flex;flex-direction:column;gap:3px}
+.day{color:var(--muted);font-size:11.5px}
+.period{align-self:flex-start;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--accent-2);color:var(--accent)}
+.period.lunch{background:#fff4e0;color:#b45309}
+.period.after,.period.closed,.period.nonwork{background:#eef0f4;color:#475467}
+.period.precool{background:var(--blue-bg);color:var(--blue)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:#eef1f4;border-radius:10px;padding:3px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:6px 10px;border-radius:8px;font-size:12.5px;color:var(--muted);font-weight:500}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:var(--shadow)}
+.btn{border:1px solid var(--line);background:#fff;padding:7px 12px;border-radius:10px;font-size:13px;font-weight:500}
+.btn:hover{border-color:#c4ccd6}
+.btn.sm{padding:4px 9px;font-size:12px;border-radius:8px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#0b6b62}
+.btn.danger{color:var(--bad)}
+.btn.blue{color:var(--blue)}
+select{font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:#fff}
+.toggle{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:0}
+.pill-demo{color:#7c3aed;background:#f3efff}
+.pill-live{color:#15803d;background:#e7f7ec}
+.pill-shadow{color:var(--violet);background:var(--violet-bg)}
+
+/* ---------- Layout ---------- */
+main{max-width:1440px;margin:0 auto;padding:16px 20px 48px;display:grid;gap:16px}
+.row2{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:16px}
+.row3{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:16px}
+.row4{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1000px){.row2,.row3,.row4{grid-template-columns:1fr}}
+.panel{display:grid;gap:16px}
+.panel[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h2{font-size:15px;margin:0;font-weight:650}
+h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px;font-weight:600}
+.lead{font-size:13px;color:var(--muted);margin:-4px 0 12px}
+
+.banner{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid #ddd6fe;border-left:4px solid #7c3aed;border-radius:12px;padding:12px 14px;font-size:13px}
+.banner p{margin:0;flex:1}
+.banner button{border:0;background:none;color:var(--muted);font-size:18px;line-height:1}
+
+/* ---------- Tabs ---------- */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+.badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:99px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+.badge:empty{display:none}
+
+/* ---------- KPIs ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.kl{font-size:12px;color:var(--muted);font-weight:500}
+.kv{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.kv small{font-size:14px;color:var(--muted);font-weight:500}
+.ks{font-size:12px;color:var(--muted)}
+.kpi.hot{background:linear-gradient(180deg,#fff7ed,#fff);border-color:#fed7aa}
+.kpi.hot .kv{color:#c2410c}
+.kpi.good .kv{color:var(--accent)}
+.kpi.bad{border-color:#fdc9b0;cursor:pointer}
+.kpi.bad .kv{color:var(--bad)}
+.bar{height:6px;background:#eef1f4;border-radius:99px;overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
+.minis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.mini{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.mini .kv{font-size:21px}
+
+/* ---------- Heatmap ---------- */
+.floors{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.floors button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 12px;font-size:12.5px}
+.floors button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.plan{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));grid-auto-rows:162px;gap:10px}
+.zone{position:relative;text-align:left;border:1px solid rgba(0,0,0,.06);border-left:5px solid var(--c);border-radius:12px;background-color:var(--bgc);padding:10px 12px;display:flex;flex-direction:column;gap:3px;transition:transform .15s,box-shadow .15s;overflow:hidden}
+.zone.wide{grid-column:span 2}
+@media(max-width:560px){.zone.wide{grid-column:span 1}}
+.zone:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,24,40,.08)}
+.zone.sel{outline:2px solid var(--ink);outline-offset:2px}
+.zt{display:flex;justify-content:space-between;gap:6px;align-items:flex-start}
+.zn{font-weight:600;font-size:13px}
+.zv{font-size:28px;font-weight:650;letter-spacing:-.02em;color:var(--c);font-variant-numeric:tabular-nums;line-height:1.15}
+.zv small{font-size:13px;font-weight:600}
+.zm{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:#344054;margin-top:auto;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.9)}
+.chip.pred{color:var(--violet)}.chip.alert{color:var(--bad)}.chip.manual{color:var(--blue)}.chip.fix{color:var(--accent)}
+.pw{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.9);white-space:nowrap}
+.pw-eco{color:#15803d}.pw-boost{color:#c2410c}.pw-off{color:#667085}.pw-normal{color:#0e7c72}
+.legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend .grad{width:160px;height:8px;border-radius:99px}
+
+/* ---------- Detail ---------- */
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dhead h2{font-size:19px;margin-top:2px}
+.mode{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--accent-2);color:var(--accent);white-space:nowrap}
+.mode.manual{background:var(--blue-bg);color:var(--blue)}.mode.off{background:#eef0f4;color:#475467}.mode.shadow{background:var(--violet-bg);color:var(--violet)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.stat{background:#f7f9fb;border-radius:10px;padding:9px 12px}
+.stat .l{font-size:11.5px;color:var(--muted)}
+.stat .v{font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:500}
+.reasons{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.reasons li{display:flex;gap:8px;font-size:13px;padding:8px 10px;border-radius:10px;background:#f7f9fb}
+.note{padding:10px 12px;border-radius:10px;font-size:13px;margin-top:8px}
+.note.pred{background:var(--violet-bg);color:#4c1d95}
+.note.alert{background:var(--bad-bg);color:#9a3412;display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.stepper button{border:0;background:#fff;width:38px;height:36px;font-size:18px}
+.stepper button:hover{background:#f3f5f7}
+.stepper span{min-width:74px;text-align:center;font-weight:650;font-variant-numeric:tabular-nums}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12.5px}
+.list li{padding:6px 10px;border-radius:8px;background:#f7f9fb;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.list li.now{background:#e3f3f1;color:var(--accent);font-weight:600}
+.list li.past{color:#98a2b3}
+.list .r{display:flex;gap:6px;align-items:center}
+
+/* thermostat widget */
+.thermo{display:flex;gap:14px;align-items:center;background:#f7f9fb;border-radius:12px;padding:12px;margin-top:10px}
+.tface{flex:none;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#2b3645,#111823);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 5px var(--ring),0 4px 10px rgba(0,0,0,.15)}
+.tface .t1{font-size:9.5px;letter-spacing:.1em;opacity:.7}
+.tface .sp{font-size:26px;font-weight:650;line-height:1.1}
+.tface .rm{font-size:11px;opacity:.75}
+.tmeta{font-size:12.5px;display:grid;gap:3px;min-width:0}
+.ok{color:#15803d;font-weight:600}
+
+/* ---------- Tables & feed ---------- */
+.tablewrap{overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11.5px;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:#fff}
+td{padding:8px;border-bottom:1px solid #f0f2f5;white-space:nowrap;font-variant-numeric:tabular-nums;vertical-align:middle}
+td .sub{font-size:11.5px;color:var(--muted);white-space:normal;max-width:280px}
+tr.click{cursor:pointer}
+tr.click:hover,tr.sel{background:#f7f9fb}
+.pos{color:var(--accent);font-weight:600}.neg{color:var(--bad);font-weight:600}
+.leakbar{display:inline-block;width:56px;height:6px;border-radius:99px;background:#f1f3f5;vertical-align:middle;margin-right:6px;overflow:hidden}
+.leakbar i{display:block;height:100%;background:var(--bad)}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;background:#eef1f4;color:#475467;white-space:nowrap}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}.tag.manual{background:var(--blue-bg);color:var(--blue)}
+.tag.good{background:#e7f7ec;color:#15803d}.tag.cut{background:#eef0f4;color:#475467}.tag.shadow{background:var(--violet-bg);color:var(--violet)}
+.feed{list-style:none;margin:0;padding:0;max-height:360px;overflow:auto;display:grid;gap:2px}
+.feed li{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:7px 6px;border-radius:8px;font-size:12.5px}
+.feed li.alert{background:var(--bad-bg)}
+.feed li.manual{background:#f1f6ff}
+.feed li.plug{background:#f6fbf9}
+.feed time{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;padding-top:1px}
+.empty{color:var(--muted);font-size:13px;padding:14px 4px;text-align:center}
+
+/* ---------- Leak cases ---------- */
+.cases{display:grid;gap:12px}
+.case{border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:12px;padding:12px 14px;background:#fff}
+.case.snoozed{border-left-color:#98a2b3;background:#fafbfc}
+.chd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.chd b{font-size:14px}
+.cmeta{font-size:12px;color:var(--muted);margin-top:2px}
+.tl{list-style:none;margin:12px 0 10px 6px;padding:0 0 0 16px;border-left:2px solid var(--line);display:grid;gap:7px}
+.tl li{position:relative;font-size:12.5px;line-height:1.4}
+.tl li::before{content:"";position:absolute;left:-23px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--dot,#98a2b3);border:2px solid #fff;box-shadow:0 0 0 1px var(--dot,#98a2b3)}
+.tl li.detect{--dot:#c2410c}.tl li.diagnose{--dot:#7c3aed}.tl li.action{--dot:#0e7c72}.tl li.manual{--dot:#1d4ed8}.tl li.verify{--dot:#15803d}.tl li.info{--dot:#98a2b3}
+.tl li.plan{color:var(--muted)}
+.tl li.plan::before{background:#fff}
+.tl time{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);margin-right:6px}
+.tl .who{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px;margin-right:4px;background:#eef1f4;color:#475467}
+.tl li.action .who{background:var(--accent-2);color:var(--accent)}.tl li.manual .who{background:var(--blue-bg);color:var(--blue)}
+.cact{display:flex;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px dashed var(--line)}
+.cact .lbl{font-size:12px;color:var(--muted);align-self:center;margin-right:2px}
+details.rcase{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fff}
+details.rcase summary{cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;list-style:none}
+details.rcase summary::-webkit-details-marker{display:none}
+.simgrid{display:grid;gap:8px}
+.simgrid .btn{text-align:left}
+
+/* ---------- Plug schedule ---------- */
+.sched{display:grid;gap:10px}
+.srow{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;font-size:12.5px}
+.srow.today b::after{content:" · today";color:var(--accent);font-weight:600}
+.sbar{position:relative;display:flex;height:26px;border-radius:7px;overflow:hidden;font-size:10.5px;font-weight:600}
+.sbar span{display:block;line-height:26px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.s-cut{background:#e5e8ee;color:#475467}
+.s-on{background:#bfe8e1;color:#0b5d55}
+.s-cond{background:repeating-linear-gradient(45deg,#fde7c7 0 6px,#fcd9a8 6px 12px);color:#8a4b07}
+.sbar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.saxis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-left:130px}
+.rules{margin:10px 0 0;padding-left:18px;font-size:12.5px;display:grid;gap:4px}
+
+/* ---------- How it works ---------- */
+.flow{display:grid;grid-template-columns:1fr 36px 1.1fr 36px 1fr 36px 1fr;align-items:stretch}
+.fcol{background:#f7f9fb;border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.fcol.ai{background:linear-gradient(180deg,#effaf8,#fff);border-color:#b6e3dc}
+.fh{font-weight:700;font-size:13px;display:flex;gap:8px;align-items:center}
+.fn{width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px}
+.fnode{display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12.5px}
+.fnode b{display:block;font-weight:600}
+.fnode span.v{color:var(--muted);font-size:12px}
+.steps{margin:0;padding-left:20px;font-size:12.5px;display:grid;gap:3px}
+.farrow{position:relative;display:flex;align-items:center;justify-content:center}
+.farrow::before{content:"";position:absolute;left:6px;right:10px;top:50%;height:2px;background:#c9d1db}
+.farrow::after{content:"";position:absolute;right:4px;top:calc(50% - 5px);border:5px solid transparent;border-left:7px solid #c9d1db}
+.farrow i{position:absolute;top:calc(50% - 4px);left:6px;width:8px;height:8px;border-radius:50%;background:var(--accent);animation:flowdot 2.4s linear infinite}
+.flow.busy .farrow i{animation-duration:.9s;background:#f97316}
+@keyframes flowdot{from{left:6px;opacity:0}15%{opacity:1}85%{opacity:1}to{left:calc(100% - 14px);opacity:0}}
+@media(max-width:1000px){
+  .flow{grid-template-columns:1fr}
+  .farrow{height:30px}
+  .farrow::before{left:50%;right:auto;top:4px;bottom:8px;width:2px;height:auto}
+  .farrow::after{right:auto;left:calc(50% - 5px);top:auto;bottom:0;border:5px solid transparent;border-top:7px solid #c9d1db}
+  .farrow i{left:calc(50% - 4px);animation-name:flowdown}
+  @keyframes flowdown{from{top:0;opacity:0}20%{opacity:1}to{top:calc(100% - 10px);opacity:0}}
+}
+.floop{margin-top:10px;background:#f6fbf9;border:1px dashed #9fd6cd;border-radius:10px;padding:9px 12px;font-size:12.5px}
+.pchips{display:flex;gap:4px;flex-wrap:wrap}
+.trace{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+@media(max-width:1000px){.trace{grid-template-columns:1fr}}
+.tstep{background:#f7f9fb;border-radius:12px;padding:10px 12px;font-size:12.5px;display:flex;flex-direction:column;gap:5px;position:relative}
+.tstep .th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.tstep .big{font-size:18px;font-weight:650}
+.tstep code{font-size:11.5px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 7px;white-space:pre-wrap;word-break:break-word;display:block}
+.ilist{margin:0;padding-left:18px;font-size:13px;display:grid;gap:7px}
+.deploy{counter-reset:d;list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.deploy li{counter-increment:d;background:#f7f9fb;border-radius:12px;padding:12px;font-size:12.5px}
+.deploy li::before{content:counter(d);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:12px;margin-bottom:6px}
+.deploy b{display:block;font-size:13px;margin-bottom:2px}
+
+/* ---------- Charts ---------- */
+canvas{width:100%;height:220px;display:block}
+.keys{display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.keys span{display:inline-flex;align-items:center;gap:5px}
+.keys i{width:14px;height:3px;border-radius:2px;display:inline-block}
+
+/* ---------- Export ---------- */
+.exports{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.exp{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;text-align:left;background:#fff}
+.exp:hover{border-color:var(--accent);background:#fbfefd}
+.exp b{font-size:13.5px}
+.exp span{font-size:12px;color:var(--muted)}
+
+/* ---------- Setup drawer ---------- */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:50;display:flex;justify-content:flex-end}
+.overlay[hidden]{display:none}
+.drawer{width:min(900px,100%);height:100%;background:#fff;overflow:auto;padding:20px 22px 0;box-shadow:-10px 0 30px rgba(0,0,0,.12)}
+.drawer h2{font-size:18px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.field input:not([type=checkbox]),.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px}
+.field textarea{min-height:84px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.field small{display:block;font-size:11px;color:#98a2b3;margin-top:3px}
+.field.check label{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:13px;margin-top:22px}
+.wd{display:flex;gap:4px;flex-wrap:wrap}
+.wd label{display:inline-flex;gap:4px;align-items:center;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--ink);margin:0}
+.ztab td{padding:4px}
+.ztab input:not([type=checkbox]),.ztab select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;min-width:70px}
+.dfoot{position:sticky;bottom:0;background:#fff;padding:14px 0 18px;margin-top:18px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.dfoot .spacer{flex:1}
+.err{color:var(--bad);font-size:12.5px;align-self:center}
+
+/* ---------- Floor plan view ---------- */
+.plan[hidden],#planView[hidden],.fp-wrap[hidden],.fp-empty[hidden]{display:none}
+.planbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:10px}
+.planbar .floors{margin:0}
+.fp-wrap{position:relative;width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.fp-wrap img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.fpz{position:absolute;border:2px solid var(--c);border-radius:6px;background-color:var(--bga);padding:3px 6px;text-align:left;display:flex;flex-direction:column;gap:0;overflow:hidden;container-type:size;transition:box-shadow .15s}
+.fpz:hover{box-shadow:0 0 0 3px rgba(22,32,43,.18);z-index:2}
+.fpz.sel{outline:3px solid var(--ink);outline-offset:1px;z-index:3}
+.fpz .n{font-size:11px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1f2937;padding-right:14px}
+.fpz .v{font-size:18px;font-weight:700;color:var(--c);line-height:1.1;font-variant-numeric:tabular-nums}
+.fpz .m{font-size:10.5px;color:#344054;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.fpz .fl{position:absolute;top:2px;right:4px;font-size:11px}
+@container (max-height:64px){.fpz .m{display:none}}
+@container (max-height:40px){.fpz .v{font-size:13px}}
+.fp-src{position:absolute;left:8px;bottom:6px;font-size:11px;color:var(--muted);background:rgba(255,255,255,.9);padding:2px 8px;border-radius:6px}
+.fp-empty{border:2px dashed var(--line);border-radius:12px;padding:36px 20px;text-align:center;display:grid;gap:10px;justify-items:center;color:var(--muted);font-size:13px}
+.fp-miss{font-size:12.5px;color:var(--muted);margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fp-miss:empty{display:none}
+/* ---------- Floor plan editor ---------- */
+.fpe{background:#fff;width:min(1400px,100%);height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;margin-left:auto;box-shadow:-10px 0 30px rgba(0,0,0,.12)}
+.fpe-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--line)}
+.fpe-top h2{font-size:18px;margin-right:auto}
+.fpe-body{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:0}
+.fpe-stage-wrap{overflow:auto;padding:16px;background:#f3f5f7}
+.fpe-stage{position:relative;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
+.fpe-stage img{display:block;width:100%;pointer-events:none;-webkit-user-drag:none}
+.fpe-stage.drawing{cursor:crosshair}
+.fpe-box{position:absolute;border:2px solid var(--accent);background:rgba(14,124,114,.16);border-radius:4px;font-size:11px;font-weight:700;color:#0b4f48;padding:2px 4px;overflow:hidden;cursor:move;white-space:nowrap;text-overflow:ellipsis}
+.fpe-box.active{border-color:#f97316;background:rgba(249,115,22,.2);color:#9a3412}
+.fpe-temp{position:absolute;border:2px dashed #f97316;background:rgba(249,115,22,.12);pointer-events:none}
+.fpe-lbl{position:absolute;transform:translate(-50%,-50%);font-size:10px;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 5px;pointer-events:none;white-space:nowrap;opacity:.8}
+.fpe-side{border-left:1px solid var(--line);overflow:auto;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.fpe-side h3{margin:12px 0 4px}
+.fpe-side .list li.active{outline:2px solid #f97316}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.fpe-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+.fpe-msg{font-size:12.5px;margin-right:auto;color:var(--accent)}
+.fpe-msg.err{color:var(--bad)}
+.newroom{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.newroom input,.newroom select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12.5px;min-width:0}
+@media(max-width:900px){.fpe{overflow:auto;grid-template-rows:auto auto auto}.fpe-body{grid-template-columns:1fr}.fpe-side{border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+    </div>
+    <div>
+      <div class="app">ThermaSense
+        <span class="pill pill-demo" title="Sensors, thermostats and smart plugs are simulated. See section 2 of the code to connect real devices.">Simulated devices</span>
+        <button class="pill" id="modePill" data-goto="how" title="Control mode — click for details"></button>
+      </div>
+      <div class="bname" id="bName"></div>
+    </div>
+  </div>
+
+  <div class="clockbox">
+    <div class="clock" id="clock">--:--</div>
+    <div class="clockmeta"><span class="period" id="period"></span><span class="day" id="dayLabel"></span></div>
+  </div>
+
+  <div class="controls">
+    <div class="seg" id="speedSeg" role="group" aria-label="Simulation speed">
+      <button data-speed="0" title="Pause">⏸ Pause</button>
+      <button data-speed="real" title="Sync to your clock and run in real time">Real time</button>
+      <button data-speed="1" class="on">1 min/s</button>
+      <button data-speed="5">5 min/s</button>
+      <button data-speed="15">15 min/s</button>
+    </div>
+    <select id="jump" aria-label="Skip to time"></select>
+    <select id="dayType" aria-label="Type of day" title="Preview a weekend or public holiday (resets at midnight)">
+      <option value="auto">📅 Day: from calendar</option>
+      <option value="workday">📅 Treat today as workday</option>
+      <option value="weekend">📅 Treat today as weekend</option>
+      <option value="holiday">📅 Treat today as public holiday</option>
+    </select>
+    <label class="toggle" title="Adds 4 °C to the outside temperature"><input type="checkbox" id="heatwave"> 🔥 Hot day</label>
+    <button class="btn" id="openSetup">⚙ Building setup</button>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="banner">
+    <p><b>Welcome.</b> This demo simulates one building's sensors, AC thermostats and smart plugs. <b>Live overview</b> shows the building now. <b>Energy leaks</b> shows each leak the AI finds and the steps it takes to fix it, with buttons if you want to act yourself. <b>Plug loads</b> shows sockets being switched off after hours, at weekends and on public holidays. <b>How it works</b> traces every command sent to the thermostats. To use your own building, click <b>📄 Upload floor plan (PDF)</b> on the heatmap. Tip: skip to 5:30 pm, or use “Day” to preview a weekend.</p>
+    <button id="closeBanner" aria-label="Dismiss">×</button>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Building overview"></section>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button data-tab="overview" class="on">🏢 Live overview</button>
+    <button data-tab="leaks">🚨 Energy leaks<span class="badge" id="leakBadge"></span></button>
+    <button data-tab="plugs">🔌 Plug loads</button>
+    <button data-tab="how">🔗 How it works &amp; AC integration</button>
+    <button data-tab="data">⬇ Download data</button>
+  </nav>
+
+  <!-- ================= OVERVIEW ================= -->
+  <section class="panel" data-panel="overview">
+    <div class="row2">
+      <div class="card">
+        <div class="card-h">
+          <h2>Live floor heatmap</h2>
+          <div class="ctrl">
+            <div class="seg" id="layoutSeg" role="group" aria-label="Layout">
+              <button data-layout="plan" class="on">🗺 Floor plan</button>
+              <button data-layout="grid">▦ Grid</button>
+            </div>
+            <div class="seg" id="viewSeg" role="group" aria-label="Heatmap colour">
+              <button data-view="temp" class="on">Temperature</button>
+              <button data-view="occ">Occupancy</button>
+              <button data-view="energy">AC power</button>
+            </div>
+          </div>
+        </div>
+        <div class="planbar">
+          <div class="floors" id="floorTabs"></div>
+          <div class="ctrl">
+            <button class="btn sm" data-fp="upload">📄 Upload floor plan (PDF)</button>
+            <button class="btn sm" data-fp="edit">✏️ Place rooms on plan</button>
+          </div>
+        </div>
+        <div class="plan" id="plan" hidden></div>
+        <div id="planView">
+          <div class="fp-wrap" id="fpWrap"><img id="fpImg" alt="Floor plan"><div id="fpZones"></div><span class="fp-src" id="fpSrc"></span></div>
+          <div class="fp-empty" id="fpEmpty" hidden></div>
+          <div class="fp-miss" id="fpMiss"></div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <aside class="card" id="detail" aria-live="polite"></aside>
+    </div>
+    <div class="row4">
+      <div class="card">
+        <div class="card-h"><h2>Temperature today</h2>
+          <div class="keys"><span><i style="background:#f97316"></i>Outside</span><span><i style="background:#0e7c72"></i>Inside (avg)</span><span><i style="background:#dc2626;opacity:.5"></i>Hot-day line</span></div>
+        </div>
+        <canvas id="chartTemp" aria-label="Temperature chart"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Power today (AC + plugs)</h2>
+          <div class="keys"><span><i style="background:#0e7c72"></i>With ThermaSense</span><span><i style="background:#98a2b3"></i>Fixed schedule, sockets always on</span></div>
+        </div>
+        <canvas id="chartPower" aria-label="Power chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>AI actions &amp; alerts</h2><span class="muted" style="font-size:12px">Newest first</span></div>
+      <ul class="feed" id="feed"></ul>
+    </div>
+  </section>
+
+  <!-- ================= LEAKS ================= -->
+  <section class="panel" data-panel="leaks" hidden>
+    <div class="minis" id="leakStats"></div>
+    <div class="card">
+      <div class="card-h"><div><h2>Active leaks: what the AI is doing</h2><div class="lead" style="margin:2px 0 0">For each leak: how it was <b>detected</b>, what caused it, the <b>steps</b> the AI took and what it plans next. Use the buttons to act yourself.</div></div><div id="leakMode" class="ctrl"></div></div>
+      <div id="activeCases" class="cases"></div>
+    </div>
+    <div class="row3">
+      <div class="card">
+        <div class="card-h"><h2>Closed today</h2><span class="muted" style="font-size:12px">Click a leak to see every step</span></div>
+        <div id="resolvedCases" class="cases"></div>
+      </div>
+      <div class="card">
+        <h2>Try it: create a leak</h2>
+        <p class="lead" style="margin-top:6px">Pick a room and trigger a common kind of energy waste, then watch the AI detect it and respond.</p>
+        <select id="simZone" style="width:100%;margin-bottom:8px" aria-label="Room"></select>
+        <div class="simgrid">
+          <button class="btn" data-sim="door">🚪 <b>Door or window left open</b><br><span class="muted" style="font-size:12px">Best in a room that has people in it and the AC running</span></button>
+          <button class="btn" data-sim="thermo">🥶 <b>Occupant turns thermostat down to 20 °C</b><br><span class="muted" style="font-size:12px">Leads to overcooling, or cooling an empty room</span></button>
+          <button class="btn" data-sim="plugs">🔌 <b>Appliances locked on</b><br><span class="muted" style="font-size:12px">Flagged once the room is empty after hours; skip to 5:30 pm</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Where is energy leaking? (by room, today)</h2><span class="muted" id="leakSummary"></span></div>
+      <div class="tablewrap"><table id="zoneTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ================= PLUGS ================= -->
+  <section class="panel" data-panel="plugs" hidden>
+    <div class="minis" id="plugStats"></div>
+    <div class="row3">
+      <div class="card">
+        <div class="card-h"><h2>When sockets are switched off</h2>
+          <div class="ctrl">
+            <button class="btn sm" data-pall="cutall">⏻ Cut idle sockets now</button>
+            <button class="btn sm" data-pall="keepall">☀ Keep all on tonight</button>
+            <button class="btn sm" data-pall="aitoggle" id="plugAiBtn"></button>
+          </div>
+        </div>
+        <div id="plugSchedule"></div>
+      </div>
+      <div class="card"><h2>Work calendar</h2><div id="plugCal"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Circuits (smart plugs &amp; PDU relays)</h2><span class="muted" style="font-size:12px">🔒 = essential circuit, never switched off</span></div>
+      <div class="tablewrap"><table id="plugTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ================= HOW IT WORKS ================= -->
+  <section class="panel" data-panel="how" hidden>
+    <div class="card">
+      <div class="card-h"><div><h2>The control loop, live</h2><div class="lead" style="margin:2px 0 0">Every 60 seconds ThermaSense reads the sensors, decides a setting for each room, and sends commands to the AC thermostats and smart plugs through a gateway. It then checks the power meters to confirm the saving.</div></div>
+        <div class="seg" role="group" aria-label="Control mode"><button data-mode="live" id="mLive">● Live control</button><button data-mode="shadow" id="mShadow">👁 Shadow mode</button></div>
+      </div>
+      <div id="flow"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div><h2>Follow one decision from sensor to thermostat</h2><div class="lead" style="margin:2px 0 0">Choose a room to see exactly what the AI read, why it decided what it did, and the command sent to that room's thermostat.</div></div><select id="traceZone" aria-label="Room"></select></div>
+      <div id="trace" class="trace"></div>
+    </div>
+    <div class="row4">
+      <div class="card">
+        <div class="card-h"><h2>Command stream</h2><span class="muted" style="font-size:12px">Every write to a thermostat or smart plug</span></div>
+        <div class="tablewrap" style="max-height:380px"><table id="cmdTable"></table></div>
+      </div>
+      <div class="card"><h2>How it connects to your AC thermostats</h2><div id="integ" style="margin-top:10px"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Connected devices</h2><span class="muted" style="font-size:12px" id="devSummary"></span></div>
+      <div class="tablewrap" style="max-height:420px"><table id="devTable"></table></div>
+    </div>
+    <div class="card">
+      <h2>Rolling it out in a new building</h2>
+      <ol class="deploy" style="margin-top:12px">
+        <li><b>Survey</b>List the rooms, their AC units and thermostats, and the socket circuits worth controlling. Mark essential circuits.</li>
+        <li><b>Add sensors</b>Thermal people counters in each zone, plus smart plugs or PDU relays on non-essential circuits. Most thermostats already report room temperature.</li>
+        <li><b>Connect the gateway</b>Put the ThermaSense gateway on the building network. It talks BACnet/IP, Modbus TCP, MQTT or KNX to the BMS and devices.</li>
+        <li><b>Upload floor plans &amp; map rooms</b>Upload each floor's plan as a PDF and drag the rooms into place. In Building setup, enter each thermostat ID, protocol and address, your working hours and your holidays. Export the config to reuse it.</li>
+        <li><b>Shadow mode (2 weeks)</b>The AI watches and logs what it <i>would</i> do while the building keeps its old schedule. Check the leaks it finds and the savings it predicts.</li>
+        <li><b>Go live</b>Switch to Live control. Wall thermostats still work as overrides, and facilities can take over any room at any time.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ================= DATA ================= -->
+  <section class="panel" data-panel="data" hidden>
+    <div class="card">
+      <div class="card-h">
+        <div><h2>Download data for facilities planning</h2><div class="muted" style="font-size:12.5px;margin-top:2px" id="exportInfo"></div></div>
+        <label class="muted" style="font-size:12.5px">Record a reading every
+          <select id="logInterval"><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select>
+        </label>
+      </div>
+      <div class="exports">
+        <button class="exp" data-export="readings"><b>📈 Room readings (CSV)</b><span>Time, room, occupants, inside &amp; outside temp, AC setpoint, AC &amp; plug power, leakage and AI reasoning</span></button>
+        <button class="exp" data-export="daily"><b>📅 Daily energy summary (CSV)</b><span>AC, plug and total energy, cost, savings vs fixed schedule, leakage, leak cases, temperature and occupancy per room per day</span></button>
+        <button class="exp" data-export="leaks"><b>🚨 Energy leak cases (CSV)</b><span>Every leak: type, room, how long it lasted, energy wasted, who fixed it and each step taken</span></button>
+        <button class="exp" data-export="plugs"><b>🔌 Plug load readings (CSV)</b><span>Each circuit's state, control source, power and energy over time</span></button>
+        <button class="exp" data-export="commands"><b>🔗 Thermostat &amp; plug commands (CSV)</b><span>Every command sent through the gateway, with protocol, point, value, acknowledgement and latency</span></button>
+        <button class="exp" data-export="actions"><b>🤖 AI actions &amp; alerts (CSV)</b><span>Every automatic adjustment, manual override and alert</span></button>
+        <button class="exp" data-export="config"><b>🏢 Building config (JSON)</b><span>Rooms, floor plans, thermostats, circuits, holidays and rules. Import it into another building.</span></button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="fpEditor" hidden>
+  <div class="fpe" role="dialog" aria-modal="true" aria-labelledby="fpeTitle">
+    <div class="fpe-top">
+      <h2 id="fpeTitle">Floor plan editor</h2>
+      <label class="muted" style="font-size:12.5px">Floor <select id="fpeFloor" aria-label="Floor"></select></label>
+      <label class="muted" style="font-size:12.5px" id="fpePageBox" hidden>PDF page <select id="fpePage" aria-label="PDF page"></select></label>
+      <input type="file" id="fpFile" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+      <button class="btn primary" data-fpe="upload">📄 Upload PDF or image</button>
+      <button class="btn danger" data-fpe="removeplan">Remove plan</button>
+    </div>
+    <div class="fpe-body">
+      <div class="fpe-stage-wrap"><div class="fpe-stage" id="fpeStage"></div></div>
+      <aside class="fpe-side" id="fpeSide"></aside>
+    </div>
+    <div class="fpe-foot"><span class="fpe-msg" id="fpeMsg"></span><button class="btn" data-fpe="close">Cancel</button><button class="btn primary" data-fpe="save">Save &amp; apply</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="setup" hidden>
+  <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="card-h"><h2 id="setupTitle">Building setup</h2><button class="btn" data-setup="close">Close</button></div>
+    <p class="muted" style="margin-top:0;font-size:13px">Set up ThermaSense for any building: name it, add its rooms, thermostats and socket circuits, and tune the AI rules. Settings are kept in this browser. Use <b>Export config</b> to copy the set-up to another building.</p>
+    <div id="setupForm"></div>
+    <div class="dfoot">
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <button class="btn" data-setup="import">Import config</button>
+      <button class="btn" data-setup="export">Export config</button>
+      <button class="btn danger" data-setup="reset">Reset to default</button>
+      <span class="spacer"></span>
+      <span class="err" id="setupErr"></span>
+      <button class="btn primary" data-setup="save">Save &amp; apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   1. BUILDING CONFIG — change this for each building
+   ===================================================================== */
+const DEFAULT_CONFIG = {
+  buildingName: "HQ Tower · Levels 5–6",
+  maxOccupancy: 80,            // people, whole building
+  comfortSetpoint: 24,         // °C when a zone is occupied
+  minSetpoint: 22,             // AI never goes below this
+  maxSetpoint: 28,             // AI never goes above this
+  currency: "$",
+  tariffPerKWh: 0.30,          // electricity price per kWh
+  logIntervalMins: 15,         // how often a data row is recorded
+  controlMode: "live",         // "live" = AI sends commands · "shadow" = AI only recommends
+
+  schedule: { officeStart:"08:30", lunchStart:"11:00", lunchEnd:"13:00", officeEnd:"17:30" },
+  workDays: [1,2,3,4,5],       // 0 = Sunday … 6 = Saturday
+  floorplans: {},              // uploaded floor plans per floor (added by the in-app floor plan editor)
+  holidays: [                  // add your public holidays / office closures (YYYY-MM-DD)
+    { date:"2026-12-25", name:"Christmas Day" },
+    { date:"2027-01-01", name:"New Year's Day" }
+  ],
+
+  rules: {
+    lunchRaise: 2,             // °C up during lunch
+    afterHoursRaise: 3,        // °C up after officeEnd (nudges staff home)
+    emptyRaise: 1.5,           // °C up once a zone is empty
+    emptyOffMins: 45,          // switch AC off after a zone is empty this long (office hours)
+    shutdownAfterMins: 20,     // after hours: switch off once empty this long
+    emptyingSoonMins: 10,      // predict a zone emptying this far ahead
+    emptyingRaise: 1,          // °C up when a zone is about to empty
+    hotDayThreshold: 32,       // °C outside = "hot day"
+    hotDayMaxRaise: 0,         // on hot days, occupied zones are raised by at most this
+    highOccupancyRatio: 0.7,   // zone counts as busy at 70% full
+    highOccupancyDrop: 1,      // °C extra cooling for busy zones
+    heatBuildUp: 1.5,          // °C above target that triggers a cooling boost
+    precoolMins: 45,           // start cooling this long before officeStart
+    baselineSetpoint: 23,      // the building's old fixed setting, used to calculate savings
+
+    aiLeakResponse: true,      // AI acts on leaks automatically (false = recommend only)
+    autoRevertOverrideMins: 30,// release a manual override that is wasting energy after this long (0 = never)
+
+    aiPlugControl: true,       // AI switches non-essential sockets off/on
+    plugCutEmptyMins: 15,      // after hours: cut a zone's sockets once empty this long
+    plugRestoreLeadMins: 15,   // workdays: restore sockets this long before officeStart
+    avCutEmptyMins: 15         // meeting-room AV cut after the room is empty this long (even in office hours)
+  },
+
+  // type: office | meeting | pantry | lobby   ratedKW: AC power at full load
+  // thermostatId / protocol / address: how the gateway reaches that room's thermostat
+  // plan: where the room sits on the floor plan, in % of the plan's width/height (set it by dragging in the floor plan editor)
+  zones: [
+    { id:"z1",  name:"Open Office East", floor:"Level 5", type:"office",  capacity:24, ratedKW:9,   thermostatId:"FCU-5-01", protocol:"BACnet/IP",  address:"5001", plan:{x:52,y:6,w:44,h:50} },
+    { id:"z2",  name:"Open Office West", floor:"Level 5", type:"office",  capacity:20, ratedKW:8,   thermostatId:"FCU-5-02", protocol:"BACnet/IP",  address:"5002", plan:{x:4,y:6,w:44,h:50} },
+    { id:"z3",  name:"Meeting Room A",   floor:"Level 5", type:"meeting", capacity:10, ratedKW:3,   thermostatId:"FCU-5-03", protocol:"BACnet/IP",  address:"5003", plan:{x:4,y:62,w:22,h:32} },
+    { id:"z4",  name:"Meeting Room B",   floor:"Level 5", type:"meeting", capacity:6,  ratedKW:2.2, thermostatId:"FCU-5-04", protocol:"BACnet/IP",  address:"5004", plan:{x:28,y:62,w:16,h:32} },
+    { id:"z5",  name:"Pantry",           floor:"Level 5", type:"pantry",  capacity:12, ratedKW:2.5, thermostatId:"SPLIT-5-05", protocol:"Modbus TCP", address:"10.20.5.15", plan:{x:48,y:62,w:20,h:32} },
+    { id:"z6",  name:"Reception",        floor:"Level 5", type:"lobby",   capacity:6,  ratedKW:3,   thermostatId:"FCU-5-06", protocol:"BACnet/IP",  address:"5006", plan:{x:72,y:62,w:24,h:32} },
+    { id:"z7",  name:"Project Studio",   floor:"Level 6", type:"office",  capacity:16, ratedKW:6,   thermostatId:"VAV-6-01", protocol:"BACnet/IP",  address:"6001", plan:{x:4,y:6,w:46,h:50} },
+    { id:"z8",  name:"Board Room",       floor:"Level 6", type:"meeting", capacity:14, ratedKW:4,   thermostatId:"VAV-6-02", protocol:"BACnet/IP",  address:"6002", plan:{x:54,y:6,w:42,h:50} },
+    { id:"z9",  name:"Training Room",    floor:"Level 6", type:"meeting", capacity:20, ratedKW:5.5, thermostatId:"VAV-6-03", protocol:"BACnet/IP",  address:"6003", plan:{x:4,y:62,w:58,h:32} },
+    { id:"z10", name:"Focus Pods",       floor:"Level 6", type:"office",  capacity:8,  ratedKW:2.5, thermostatId:"SPLIT-6-04", protocol:"MQTT",     address:"l6/focus", plan:{x:66,y:62,w:30,h:32} }
+  ],
+
+  // Plug-load circuits on smart plugs / PDU relays.
+  // type: desk | printer | av | appliance | essential   perSeat: activeKW & standbyKW are per desk
+  plugs: [
+    { id:"p1",  zoneId:"z1",  name:"Workstations & monitors", type:"desk",     perSeat:true, activeKW:0.12, standbyKW:0.018 },
+    { id:"p2",  zoneId:"z1",  name:"Printer & copier",        type:"printer",  activeKW:0.6,  standbyKW:0.12 },
+    { id:"p3",  zoneId:"z2",  name:"Workstations & monitors", type:"desk",     perSeat:true, activeKW:0.12, standbyKW:0.018 },
+    { id:"p4",  zoneId:"z3",  name:"Display & video conferencing", type:"av",  activeKW:0.35, standbyKW:0.06 },
+    { id:"p5",  zoneId:"z4",  name:"Display screen",          type:"av",       activeKW:0.2,  standbyKW:0.04 },
+    { id:"p6",  zoneId:"z5",  name:"Coffee machine",          type:"appliance",activeKW:1.2,  standbyKW:0.15 },
+    { id:"p7",  zoneId:"z5",  name:"Hot water boiler",        type:"appliance",activeKW:1.5,  standbyKW:0.35 },
+    { id:"p8",  zoneId:"z5",  name:"Fridge",                  type:"essential",activeKW:0.15, standbyKW:0.15, essential:true },
+    { id:"p9",  zoneId:"z6",  name:"Reception desk & signage",type:"desk",     activeKW:0.3,  standbyKW:0.1 },
+    { id:"p10", zoneId:"z6",  name:"Security & access control", type:"essential", activeKW:0.12, standbyKW:0.12, essential:true },
+    { id:"p11", zoneId:"z7",  name:"Workstations & monitors", type:"desk",     perSeat:true, activeKW:0.14, standbyKW:0.02 },
+    { id:"p12", zoneId:"z7",  name:"Printer & plotter",       type:"printer",  activeKW:0.8,  standbyKW:0.15 },
+    { id:"p13", zoneId:"z7",  name:"Network cabinet",         type:"essential",activeKW:0.4,  standbyKW:0.4, essential:true },
+    { id:"p14", zoneId:"z8",  name:"Display wall & video conferencing", type:"av", activeKW:0.6, standbyKW:0.1 },
+    { id:"p15", zoneId:"z9",  name:"Projector & AV rack",     type:"av",       activeKW:0.5,  standbyKW:0.08 },
+    { id:"p16", zoneId:"z10", name:"Workstations & monitors", type:"desk",     perSeat:true, activeKW:0.12, standbyKW:0.018 }
+  ]
+};
+
+// Demo only: pre-loaded problems so you can watch leak detection. Set to null to switch off.
+const DEMO = { acOverride:{ zoneId:"z9", setpoint:21 }, plugLock:"p7" };
+
+/* =====================================================================
+   2. SENSOR INPUTS — replace these with real feeds to go live
+      (BMS / thermal people counters / thermostats / smart-plug meters / weather API).
+      Each is called once per minute.
+   ===================================================================== */
+
+// Outside air temperature (°C). Live: latest reading from a weather station/API.
+function readOutsideTemp(t){
+  const h = t/60;
+  const curve = Math.max(0, Math.sin((h-7)/14*Math.PI));   // peaks ~2 pm
+  return 26 + S.dayOffset + 5.5*curve + (S.heatwave?4:0) + Math.sin(t/37)*0.25;
+}
+
+// People in a zone. Live: count from people counters / thermal heat sensors.
+function readOccupancy(z, zs, t){
+  const target = occupancyPattern(z, zs, t);
+  const rate = z.type==="meeting" ? 0.5 : 0.2;
+  let n = zs.occ + (target - zs.occ)*rate;
+  if(target >= 1) n += (Math.random()-0.5)*1.5;
+  return clamp(Math.floor(n + Math.random()), 0, z.capacity);
+}
+
+// Room temperature & AC power. Live: room sensor reading + AC power meter.
+const MAX_REMOVAL = 0.2; // °C per minute the AC can remove at full power
+function roomPhysics(temp, setpoint, acOn, occ, z, out, leak, cap){
+  cap = cap==null ? 1 : cap;
+  const gain = 0.012*(out-temp) + 0.07*occ/Math.max(1,z.capacity) + 0.004 + (leak?0.2:0);
+  const removal = acOn ? clamp(gain + 0.35*(temp-setpoint), 0, MAX_REMOVAL*cap) : 0;
+  return { temp: temp + gain - removal, removal, kW: acOn ? z.ratedKW*(0.12 + 0.88*removal/MAX_REMOVAL) : 0 };
+}
+
+// Plug-load power if the circuit is ON (kW). Live: smart plug / PDU power reading.
+function readPlugLoad(c, z, zs){
+  const occ = zs.occ, cap = Math.max(1, z.capacity);
+  if(c.perSeat){ const n = Math.min(occ, cap); return n*c.activeKW + (cap-n)*c.standbyKW; }
+  if(c.essential) return c.activeKW*(0.92 + Math.random()*0.16);
+  return occ>0 ? c.standbyKW + (c.activeKW-c.standbyKW)*clamp(0.3+occ/cap, 0, 1) : c.standbyKW;
+}
+
+/* =====================================================================
+   3. APP ENGINE (no need to edit below unless you want to change logic)
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const f1 = v => (Math.round(v*10)/10).toFixed(1);
+const f2 = v => (Math.round(v*100)/100).toFixed(2);
+const toMin = s => { const [h,m] = String(s).split(":").map(Number); return (h||0)*60 + (m||0); };
+const fmtClock = t => { t = ((Math.floor(t)%1440)+1440)%1440; return String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0"); };
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const slugify = s => String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+function hash(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function seeded(seed){ return () => { seed=(Math.imul(seed,1664525)+1013904223)>>>0; return seed/4294967296; }; }
+const TYPE_LABEL = { office:"Office", meeting:"Meeting room", pantry:"Pantry / café", lobby:"Lobby / reception" };
+const PLUG_TYPES = { desk:"Desks & workstations", printer:"Printers & copiers", av:"AV & displays", appliance:"Kitchen appliances", essential:"Essential equipment" };
+const PROTOCOLS = ["BACnet/IP","Modbus TCP","MQTT","KNX"];
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const LEAK_INFO = {
+  empty:  { icon:"🚪", title:"Cooling an empty room",            short:"Cooling empty room",   sensors:"thermal people counter + AC power meter" },
+  over:   { icon:"🥶", title:"Overcooling",                      short:"Overcooling",          sensors:"room temperature sensor + people counter" },
+  leak:   { icon:"🌬️", title:"Heat leak: door, window or faulty unit", short:"Heat leak",   sensors:"room temperature sensor + AC output meter" },
+  afterov:{ icon:"🌙", title:"AC left on after hours",           short:"After-hours override", sensors:"people counter + work calendar" },
+  phantom:{ icon:"🔌", title:"Phantom plug load (sockets left on)", short:"Phantom plug load", sensors:"smart-plug power meters + people counter" }
+};
+
+/* ---------- Config storage ---------- */
+const STORE_KEY = "thermasense-config-v2";
+const DEFAULT_SIG = String(hash(JSON.stringify(DEFAULT_CONFIG)));
+function mergeConfig(base, over){
+  const c = clone(base);
+  if(!over || typeof over!=="object") return c;
+  Object.keys(over).forEach(k => {
+    if(k==="schedule"||k==="rules") c[k] = Object.assign({}, base[k], over[k]);
+    else c[k] = over[k];
+  });
+  if(!Array.isArray(c.plugs)) c.plugs = [];
+  if(!Array.isArray(c.holidays)) c.holidays = [];
+  if(!c.floorplans || typeof c.floorplans!=="object") c.floorplans = {};
+  if(!Array.isArray(c.workDays)) c.workDays = [1,2,3,4,5];
+  c.zones.forEach((z,i) => { z.thermostatId = z.thermostatId || "TSTAT-"+(i+1); z.protocol = PROTOCOLS.includes(z.protocol) ? z.protocol : "BACnet/IP"; z.address = z.address || String(1000+i); });
+  return c;
+}
+function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const s = JSON.parse(raw); if(s.sig===DEFAULT_SIG && s.cfg) return mergeConfig(DEFAULT_CONFIG, s.cfg); }
+  }catch(e){}
+  return mergeConfig(DEFAULT_CONFIG, {});
+}
+function saveConfig(){ S.cfgVer++; try{ localStorage.setItem(STORE_KEY, JSON.stringify({sig:DEFAULT_SIG, cfg:CFG})); return true; }catch(e){ return false; } }
+
+let CFG = loadConfig();
+
+/* ---------- State ---------- */
+const S = {
+  t:0, day:1, startDate:new Date(), speed:1, acc:0, heatwave:false, dayOffset:Math.random()*1.5-0.5,
+  dayTypeOverride:"auto", cfgVer:0, _di:null,
+  outside:28, zones:{}, plugs:{}, history:[], log:[], plugLog:[], actions:[], days:[], cmds:[], cases:[], caseSeq:0, suppress:{},
+  selected:null, floor:null, view:"temp", layout:"plan", tab:"overview", traceZone:null, simZone:null, openDetails:{}, hold:false
+};
+function freshDay(){ return {kWh:0, plugKWh:0, baseKWh:0, basePlugKWh:0, wasteKWh:0, tempSum:0, tempN:0, peakOcc:0, personMins:0, adjustments:0, leaks:0}; }
+function newZoneState(z){
+  return { occ:0, temp:27.5, baseTemp:27.5, setpoint:CFG.comfortSetpoint, acOn:false, kW:0, baseKW:0, removal:0, plugKW:0, basePlugKW:0,
+    auto:true, override:CFG.comfortSetpoint, overrideOn:true,
+    meetings: (z.type==="meeting" && dayInfo().type==="workday") ? genMeetings(z.capacity) : [],
+    occHist:[], emptyMins:999, onMins:0, maxedMins:0, leak:0, leakFixAt:null, boost:false, highOcc:false,
+    aiOff:false, cap:1, noBoost:false, rec:null, cmdKey:"", lastSentOn:false, lastSentSp:null, lastSentCap:1, lastCmd:null,
+    reasons:[], prediction:null, mode:"Off", power:"Off", alerts:[], d:freshDay() };
+}
+function newPlugState(){ return { want:null, state:"off", kW:0, baseKW:0, kWh:0, baseKWh:0, wasteKWh:0, manual:null, exemptDate:null, forceCut:false, why:"", by:"AI" }; }
+function syncZones(){
+  CFG.zones.forEach(z => {
+    if(!S.zones[z.id]) S.zones[z.id] = newZoneState(z);
+    const zs = S.zones[z.id];
+    const wd = dayInfo().type==="workday";
+    if(z.type==="meeting" && !zs.meetings.length && wd) zs.meetings = genMeetings(z.capacity);
+    if(z.type!=="meeting") zs.meetings = [];
+    zs.occ = Math.min(zs.occ, z.capacity);
+  });
+  Object.keys(S.zones).forEach(id => { if(!CFG.zones.find(z=>z.id===id)) delete S.zones[id]; });
+  CFG.plugs.forEach(c => { if(!S.plugs[c.id]) S.plugs[c.id] = newPlugState(); });
+  Object.keys(S.plugs).forEach(id => { if(!CFG.plugs.find(c=>c.id===id)) delete S.plugs[id]; });
+}
+const zoneById = id => CFG.zones.find(z => z.id===id);
+const plugsIn = zid => CFG.plugs.filter(c => c.zoneId===zid);
+const absNow = () => S.day*1440 + S.t;
+
+/* ---------- Calendar & schedule ---------- */
+function dateObj(){ const d = new Date(S.startDate); d.setHours(12,0,0,0); d.setDate(d.getDate() + S.day - 1); return d; }
+function simDate(){ const d = dateObj(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function dayInfo(){
+  const key = S.day+"|"+S.dayTypeOverride+"|"+S.cfgVer;
+  if(S._di && S._di.key===key) return S._di.v;
+  let v; const o = S.dayTypeOverride;
+  if(o==="workday") v = {type:"workday", label:"Workday"};
+  else if(o==="weekend") v = {type:"weekend", label:"Weekend"};
+  else if(o==="holiday") v = {type:"holiday", label:"Public holiday"};
+  else {
+    const ds = simDate(), h = (CFG.holidays||[]).find(h => h.date===ds);
+    if(h) v = {type:"holiday", label:"Public holiday" + (h.name ? " ("+h.name+")" : "")};
+    else if(!(CFG.workDays||[]).includes(dateObj().getDay())) v = {type:"weekend", label:"Weekend"};
+    else v = {type:"workday", label:"Workday"};
+  }
+  S._di = {key, v}; return v;
+}
+function sched(){
+  const s = CFG.schedule;
+  return { start:toMin(s.officeStart), ls:toMin(s.lunchStart), le:toMin(s.lunchEnd), end:toMin(s.officeEnd),
+           precool: toMin(s.officeStart) - (CFG.rules.precoolMins||0) };
+}
+function periodOf(t){
+  if(dayInfo().type!=="workday") return "nonwork";
+  const s = sched();
+  if(t < s.precool) return "closed";
+  if(t < s.start) return "precool";
+  if(t >= s.ls && t < s.le) return "lunch";
+  if(t < s.end) return "work";
+  return "after";
+}
+function periodLabel(p){ return p==="nonwork" ? dayInfo().label+" · closed" : { closed:"Building closed", precool:"Pre-cooling", work:"Office hours", lunch:"Lunch break", after:"After hours" }[p]; }
+
+function genMeetings(cap){
+  const s = sched(), out = [];
+  let t = s.start + 30;
+  while(t < s.end - 30){
+    if(Math.random() < 0.55){
+      const dur = [30,45,60,90][Math.floor(Math.random()*4)];
+      const end = Math.min(t+dur, s.end+30);
+      const overlapsLunch = t < s.le && end > s.ls;
+      if(!overlapsLunch || Math.random() < 0.25)
+        out.push({ start:t, end, people:Math.max(2, Math.round(cap*(0.45+Math.random()*0.55))) });
+      t = end + 15;
+    } else t += 30;
+  }
+  return out;
+}
+
+// Typical daily pattern used by the simulator
+function occupancyPattern(z, zs, t){
+  const s = sched(), di = dayInfo();
+  if(di.type!=="workday"){
+    const firstOffice = CFG.zones.find(x => x.type==="office");
+    return (di.type==="weekend" && firstOffice && z.id===firstOffice.id && t>=600 && t<840) ? 2 : 0;
+  }
+  if(z.type==="meeting"){ const m = zs.meetings.find(m => t>=m.start && t<m.end); return m ? m.people : 0; }
+  let f;
+  if(t < s.start-60) f = 0;
+  else if(t < s.start) f = 0.6*(t-(s.start-60))/60;
+  else if(t < s.ls) f = 0.85;
+  else if(t < s.le) f = 0.15;
+  else if(t < s.end) f = 0.8;
+  else if(t < s.end+120) f = 0.5*(1-(t-s.end)/120);
+  else f = 0;
+  if(z.type==="pantry") f = (t>=s.ls && t<s.le) ? 0.9 : f*0.2;
+  if(z.type==="lobby") f = (t>=s.start-30 && t<s.end+30) ? 0.35 : 0;
+  return z.capacity*f;
+}
+
+/* ---------- AI decision engine (AC) ---------- */
+function predictEmpty(z, zs, t){
+  const R = CFG.rules, s = sched(), H = R.emptyingSoonMins;
+  if(z.type==="meeting"){
+    const m = zs.meetings.find(m => t>=m.start && t<m.end);
+    if(m && m.end-t <= H){
+      const next = zs.meetings.find(n => n.start>=m.end && n.start-m.end < 15);
+      if(!next) return { mins:m.end-t, why:"booking ends & heat signature easing" };
+    }
+    return null;
+  }
+  if(z.type!=="pantry"){
+    if(t < s.ls && s.ls-t <= H) return { mins:s.ls-t, why:"lunch break approaching" };
+    if(t < s.end && s.end-t <= H) return { mins:s.end-t, why:"end of work day approaching" };
+  }
+  const h = zs.occHist;
+  if(h.length >= 10){
+    const past = h[0];
+    if(past >= 4 && zs.occ <= past*0.5){
+      const rate = (past-zs.occ)/(h.length-1);
+      const mins = Math.max(1, Math.round(zs.occ/rate));
+      if(mins <= H*2) return { mins, why:"heat signature falling fast" };
+    }
+  }
+  return null;
+}
+
+function decide(z, zs, t, out, period){
+  const R = CFG.rules, sc = CFG.schedule, comfort = +CFG.comfortSetpoint;
+  const occ = zs.occ, ratio = occ/Math.max(1,z.capacity), hot = out >= R.hotDayThreshold;
+  const open = period==="work" || period==="lunch";
+  const reasons = []; let raise = 0, acOn = true, mode = "Comfort", prediction = null;
+
+  // 4. Timing (incl. weekends & public holidays)
+  if(period==="nonwork"){
+    const di = dayInfo();
+    if(occ>0){ raise += 1; mode="Weekend eco"; reasons.push(["📅",`${di.label}: ${occ} people detected here, so only this zone is cooled (+1 °C)`]); }
+    else { acOn=false; mode="Off"; reasons.push(["📅",`${di.label}: zone empty, AC off`]); }
+  } else if(period==="closed"){
+    if(occ>0){ raise += 1; mode="Eco"; reasons.push(["🌙","Early arrival before office hours: light cooling only (+1 °C)"]); }
+    else { acOn=false; mode="Off"; reasons.push(["🌙","Building closed and zone empty: AC off"]); }
+  } else if(period==="precool"){
+    mode="Pre-cool"; reasons.push(["⏰",`Pre-cooling so the space is comfortable by ${sc.officeStart}`]);
+  } else if(period==="after"){
+    if(occ===0 && zs.emptyMins>=R.shutdownAfterMins){ acOn=false; mode="Off"; reasons.push(["🏠",`After ${sc.officeEnd} and empty for ${zs.emptyMins>600?"hours":zs.emptyMins+" min"}: AC off`]); }
+    else { raise += R.afterHoursRaise; mode="After hours"; reasons.push(["🏠",`After ${sc.officeEnd}: +${R.afterHoursRaise} °C to encourage staff to head home on time`]); }
+  } else if(period==="lunch"){
+    if(z.type==="pantry") reasons.push(["🍱","Pantry is busiest at lunch, so no lunch-time increase"]);
+    else { raise += R.lunchRaise; mode="Lunch eco"; reasons.push(["🍱",`Lunch break (${sc.lunchStart}–${sc.lunchEnd}): +${R.lunchRaise} °C while staff are out`]); }
+  } else reasons.push(["🏢","Office hours: comfort mode"]);
+
+  // 1. Occupancy: empty zones
+  if(open && occ===0){
+    const next = z.type==="meeting" ? zs.meetings.find(m => m.start>t && m.start-t<=15) : null;
+    if(next){ acOn=true; raise=0; mode="Pre-cool"; reasons.push(["📅",`Booked at ${fmtClock(next.start)} for ${next.people} people: pre-cooling`]); }
+    else if(zs.emptyMins >= R.emptyOffMins){ acOn=false; mode="Idle"; reasons.push(["🚪",`Empty for ${zs.emptyMins>600?"hours":zs.emptyMins+" min"}: AC off until the heat sensor detects people`]); }
+    else if(zs.emptyMins >= 5){ raise += R.emptyRaise; mode="Empty eco"; reasons.push(["🚪",`Empty for ${zs.emptyMins} min: +${R.emptyRaise} °C`]); }
+  }
+
+  // Leak response: AC off until people return
+  if(zs.aiOff){
+    if(occ>0) zs.aiOff = false;
+    else { acOn=false; mode="Leak fix"; reasons.push(["🛠","Leak response: AC switched off until the heat sensor detects people"]); }
+  }
+
+  // 2. Heat sensor prediction: about to empty
+  if(acOn && open && occ>0){
+    const p = predictEmpty(z, zs, t);
+    if(p){ prediction=p; raise += R.emptyingRaise; if(mode==="Comfort") mode="Winding down";
+      reasons.push(["🔮",`Predicted to empty in ~${p.mins} min (${p.why}): dialling AC and power down early (+${R.emptyingRaise} °C)`]); }
+  }
+
+  // 3. External temperature: hot days
+  if(hot && occ>0 && raise > R.hotDayMaxRaise){
+    raise = R.hotDayMaxRaise;
+    reasons.push(["🔥",`Hot day (${out.toFixed(1)} °C outside): ${R.hotDayMaxRaise>0 ? "increase capped at +"+R.hotDayMaxRaise+" °C" : "temperature held"} for the people still here, even though occupancy is low`]);
+  }
+
+  let sp = comfort + raise;
+
+  // 1. Occupancy: busy zones
+  zs.highOcc = zs.highOcc ? ratio >= R.highOccupancyRatio-0.1 : ratio >= R.highOccupancyRatio;
+  if(acOn && zs.highOcc){ sp -= R.highOccupancyDrop; if(mode==="Comfort") mode="Boost";
+    reasons.push(["👥",`Busy: ${occ}/${z.capacity} people, so extra cooling (−${R.highOccupancyDrop} °C)`]); }
+
+  // 2. Internal heat sensor: heat build-up
+  const over = zs.temp - sp;
+  if(zs.noBoost){
+    zs.boost = false;
+    if(acOn && occ>0 && over >= R.heatBuildUp) reasons.push(["🛠","Leak response: boost paused, since extra cooling would escape through the opening"]);
+  } else {
+    zs.boost = acOn && occ>0 && (zs.boost ? over>=0.5 : over>=R.heatBuildUp);
+    if(zs.boost){ sp -= 0.5; reasons.push(["🌡️",`Heat sensor: room is ${over.toFixed(1)} °C above target, boosting cooling`]); }
+  }
+  if(acOn && zs.cap < 1) reasons.push(["🛠",`Leak response: AC output capped at ${Math.round(zs.cap*100)}% until the leak is fixed`]);
+
+  sp = clamp(Math.round(sp*2)/2, CFG.minSetpoint, CFG.maxSetpoint);
+  const pwr = (on,v) => !on ? "Off" : v>=comfort+1.5 ? "Eco" : v<comfort ? "Boost" : "Normal";
+
+  if(!zs.auto){
+    return { setpoint:zs.override, acOn:zs.overrideOn, mode:"Manual", power:pwr(zs.overrideOn, zs.override), prediction,
+      reasons:[["✋","Manual override: AI paused for this zone"],["🤖",`AI would choose: ${acOn ? sp.toFixed(1)+" °C" : "AC off"} (${reasons[reasons.length-1][1]})`]] };
+  }
+  return { setpoint:sp, acOn, mode, power:pwr(acOn,sp), prediction, reasons };
+}
+
+/* ---------- Gateway: commands to thermostats & smart plugs ----------
+   Live: replace the body of sendCmd() with a call to your BMS / gateway API. */
+function sendCmd(device, zone, protocol, c, shadowed){
+  const r = Math.random();
+  const rec = { date:simDate(), t:S.t, device, zone, protocol, op:c.op, point:c.point, value:c.value,
+    status: shadowed ? "not sent · shadow mode" : r<0.007 ? "timeout → retried ✓" : "✓ acknowledged",
+    ms: shadowed ? null : Math.round(35 + Math.random()*140 + (r<0.007 ? 2000 : 0)) };
+  S.cmds.unshift(rec); if(S.cmds.length > 3000) S.cmds.pop();
+  return rec;
+}
+function acCmd(z, what, val){
+  const p = z.protocol||"BACnet/IP", a = z.address||"";
+  if(p==="Modbus TCP"){
+    if(what==="sp")  return {op:"Write Holding Register", point:`${a} · reg 40012 (cool setpoint ×10)`, value:String(Math.round(val*10))};
+    if(what==="cap") return {op:"Write Holding Register", point:`${a} · reg 40020 (max output %)`, value:String(val)};
+    return {op:"Write Coil", point:`${a} · coil 00001 (unit enable)`, value: val ? "1 (on)" : "0 (off)"};
+  }
+  if(p==="MQTT"){
+    const base = `bldg/${slugify(z.floor)}/${slugify(a||z.name)}/thermostat`;
+    if(what==="sp")  return {op:"PUBLISH", point:base+"/setpoint/set", value:val.toFixed(1)};
+    if(what==="cap") return {op:"PUBLISH", point:base+"/max_output/set", value:String(val)};
+    return {op:"PUBLISH", point:base+"/power/set", value: val ? "ON" : "OFF"};
+  }
+  if(p==="KNX"){
+    if(what==="sp")  return {op:"GroupValue_Write", point:`3/1/${a} (setpoint)`, value:val.toFixed(1)+" °C"};
+    if(what==="cap") return {op:"GroupValue_Write", point:`3/3/${a} (max output)`, value:val+" %"};
+    return {op:"GroupValue_Write", point:`3/0/${a} (on/off)`, value: val ? "1" : "0"};
+  }
+  if(what==="sp")  return {op:"WriteProperty", point:`device ${a} · AV:1 Occupied_Cool_Setpoint @ priority 12`, value:val.toFixed(1)+" °C"};
+  if(what==="cap") return {op:"WriteProperty", point:`device ${a} · AV:5 Max_Output @ priority 12`, value:val+" %"};
+  return {op:"WriteProperty", point:`device ${a} · BV:1 Unit_Enable @ priority 12`, value: val ? "ACTIVE (on)" : "INACTIVE (off)"};
+}
+function plugDevice(c){ return c.deviceId || "PLUG-" + String(c.id).toUpperCase(); }
+function plugCmd(c, z, on){
+  const p = c.protocol || "MQTT";
+  if(p==="Modbus TCP") return {op:"Write Coil", point:`${plugDevice(c)} · relay coil`, value: on ? "1 (on)" : "0 (off)"};
+  if(p==="BACnet/IP") return {op:"WriteProperty", point:`${plugDevice(c)} · BO:1 Relay`, value: on ? "ACTIVE (on)" : "INACTIVE (off)"};
+  return {op:"PUBLISH", point:`bldg/${slugify(z.floor)}/${slugify(z.name)}/${slugify(c.name)}/relay/set`, value: on ? "ON" : "OFF"};
+}
+function acCommands(z, zs, dec, shadowed){
+  const dev = z.thermostatId || z.id, proto = z.protocol || "BACnet/IP";
+  if(dec.acOn !== zs.lastSentOn){ zs.lastCmd = sendCmd(dev, z.name, proto, acCmd(z,"on",dec.acOn), shadowed); zs.lastSentOn = dec.acOn; }
+  if(dec.acOn && dec.setpoint !== zs.lastSentSp){ zs.lastCmd = sendCmd(dev, z.name, proto, acCmd(z,"sp",dec.setpoint), shadowed); zs.lastSentSp = dec.setpoint; }
+  if(zs.cap !== zs.lastSentCap){ zs.lastCmd = sendCmd(dev, z.name, proto, acCmd(z,"cap",Math.round(zs.cap*100)), shadowed); zs.lastSentCap = zs.cap; }
+}
+
+/* ---------- Plug-load controller ---------- */
+function plugDecision(c, z, zs, ps, t, period){
+  const R = CFG.rules, s = sched(), workday = period!=="nonwork";
+  if(c.essential) return ["on","Essential circuit, never cut","Essential"];
+  if(ps.manual) return [ps.manual, ps.manual==="on" ? "Locked ON manually" : "Switched OFF manually", "Manual"];
+  if(ps.exemptDate===simDate()) return ["on","Kept on by facilities until midnight","Exempt"];
+  const inHours = workday && t >= s.start - R.plugRestoreLeadMins && t < s.end;
+  if(ps.forceCut){
+    if(zs.occ>0 || inHours) ps.forceCut = false;
+    else return ["off","Cut by leak response / facilities","AI"];
+  }
+  if(!R.aiPlugControl) return ["on","AI plug control is switched off","Manual"];
+  if(zs.occ>0) return ["on", workday ? (inHours ? "Office hours, people present" : "People still here, so sockets kept on") : "People detected on a non-working day, so sockets restored for them", "AI"];
+  if(inHours){
+    if(c.type==="av"){
+      if(zs.meetings.some(m => m.start>t && m.start-t<=10)) return ["on","Booking starts soon, so AV restored","AI"];
+      if(zs.emptyMins >= R.avCutEmptyMins) return ["off",`Room empty ${zs.emptyMins>600?"for hours":zs.emptyMins+" min"}, so AV cut`,"AI"];
+    }
+    return ["on","Office hours","AI"];
+  }
+  if(zs.emptyMins >= R.plugCutEmptyMins)
+    return ["off", !workday ? `${dayInfo().label}: non-essential sockets off all day` : t < s.start ? `Before office hours: off until ${fmtClock(s.start-R.plugRestoreLeadMins)}` : `After hours, zone empty ${zs.emptyMins>600?"for hours":zs.emptyMins+" min"}: cut`, "AI"];
+  return ["on",`After hours: will cut once zone is empty for ${R.plugCutEmptyMins} min`,"AI"];
+}
+function applyPlug(c, period, quiet){
+  const z = zoneById(c.zoneId); if(!z) return;
+  const zs = S.zones[z.id], ps = S.plugs[c.id], shadow = CFG.controlMode==="shadow";
+  const [want, why, by] = plugDecision(c, z, zs, ps, S.t, period);
+  ps.why = why; ps.by = by;
+  const shadowed = shadow && by==="AI";
+  if(want !== ps.want){
+    if(ps.want!=null && !quiet){
+      sendCmd(plugDevice(c), z.name, c.protocol||"MQTT", plugCmd(c, z, want==="on"), shadowed);
+      addAction(z, `🔌 ${c.name}: ${want==="on" ? "power restored" : "power cut"}${shadowed ? " (recommended only, shadow mode)" : ""}: ${why}`, by==="Manual" ? "manual" : "plug");
+    }
+    ps.want = want;
+  }
+  ps.state = shadowed ? "on" : want;
+  const L = readPlugLoad(c, z, zs);
+  ps.kW = ps.state==="on" ? L : 0; ps.baseKW = L;
+}
+
+/* ---------- Energy leak detection ---------- */
+function detectLeaks(z, zs, period){
+  const comfort = +CFG.comfortSetpoint, today = simDate();
+  let a = [];
+  zs.onMins = zs.acOn ? zs.onMins+1 : 0;
+  const capR = MAX_REMOVAL*(zs.cap||1);
+  zs.tempHist = zs.tempHist || []; zs.tempHist.push(zs.temp); if(zs.tempHist.length > 7) zs.tempHist.shift();
+  const notFalling = zs.tempHist.length >= 7 && zs.temp >= zs.tempHist[0] - 0.1;
+  zs.maxedMins = (zs.acOn && zs.removal >= capR*0.97 && zs.temp > zs.setpoint+0.8 && zs.onMins > 20 && notFalling) ? zs.maxedMins+1 : 0;
+  if(zs.maxedMins >= 5) a.push({key:"leak", full:false,
+    text:`AC at ${Math.round((zs.cap||1)*100)}% output for ${zs.maxedMins} min, but the room is still ${f1(zs.temp-zs.setpoint)} °C above target`});
+  const outOfHours = period==="after" || period==="nonwork" || period==="closed";
+  const afterov = !zs.auto && zs.acOn && outOfHours && zs.occ===0;
+  if(afterov) a.push({key:"afterov", full:true, text:"Manual override is keeping the AC on in an empty zone outside office hours"});
+  else if(zs.acOn && zs.occ===0 && zs.emptyMins>=20 && (!zs.auto || (zs.emptyMins>=30 && zs.mode!=="Pre-cool" && zs.kW > 0.65*z.ratedKW))) a.push({key:"empty", full:true,
+    text:`Nobody here for ${zs.emptyMins>600?"hours":zs.emptyMins+" min"}, but the AC is still drawing ${f2(zs.kW)} kW`});
+  if(zs.acOn && zs.occ>0 && zs.temp < comfort-2) a.push({key:"over", full:true,
+    text:`Room at ${f1(zs.temp)} °C, which is ${f1(comfort-zs.temp)} °C colder than the ${comfort} °C comfort setting`});
+  const inHrs = period==="work" || period==="lunch" || period==="precool";
+  const ph = plugsIn(z.id).filter(c => { const ps = S.plugs[c.id];
+    const notByAI = ps.by==="Manual" || (CFG.controlMode==="shadow" && ps.want==="off");
+    return !c.essential && ps.state==="on" && notByAI && ps.exemptDate!==today && zs.occ===0 && zs.emptyMins>=30 && (c.type==="av" || !inHrs); });
+  const phKW = ph.reduce((s,c) => s + S.plugs[c.id].kW, 0);
+  if(ph.length && phKW >= 0.03) a.push({key:"phantom", full:true, kw:phKW, circuits:ph.map(c=>c.id),
+    text:`${ph.map(c=>c.name).join(", ")} still on with nobody here for ${zs.emptyMins>600?"hours":zs.emptyMins+" min"} (${f2(phKW)} kW)`});
+  a = a.filter(x => S.suppress[z.id+"|"+x.key] !== today);
+  a.forEach(x => { x.label = LEAK_INFO[x.key].short; });
+  zs.alerts = a;
+  a.forEach(x => { if(!S.cases.some(c => c.zoneId===z.id && c.key===x.key && (c.status==="active"||c.status==="snoozed"))) openCase(z, zs, x); });
+}
+
+/* ---------- Leak cases: detect → diagnose → act → verify ---------- */
+function addStep(c, kind, icon, text, who){ c.steps.push({t:S.t, kind, icon, text, who: who || (kind==="manual" ? "You" : kind==="action" ? "AI" : "")}); }
+function scheduleFix(zs){ if(zs.leak>0 && !zs.leakFixAt) zs.leakFixAt = absNow() + 8 + Math.floor(Math.random()*12); }
+function revertAC(z){ const zs = S.zones[z.id]; zs.auto = true; if(zs.occ===0) zs.aiOff = true; }
+function diagnose(z, zs, key, al){
+  if(key==="empty") return !zs.auto ? `Cause: a manual override (${zs.overrideOn ? f1(zs.override)+" °C" : "on"}) at the wall thermostat is keeping the AC running` : "Cause: AC still cooling after the room emptied";
+  if(key==="over") return !zs.auto ? `Cause: someone set the wall thermostat to ${f1(zs.override)} °C` : "Cause: busy-room boost overshot the target";
+  if(key==="leak") return "Cause: heat is coming in faster than the AC can remove it. This usually means a door or window left open, blinds up in full sun, or a failing unit";
+  if(key==="afterov") return `Cause: a manual override set earlier is still active after ${CFG.schedule.officeEnd}`;
+  const locked = (al.circuits||[]).filter(id => S.plugs[id] && S.plugs[id].manual==="on");
+  if(locked.length) return `Cause: ${locked.map(id => (CFG.plugs.find(c=>c.id===id)||{}).name).join(", ")} locked ON manually`;
+  if(CFG.controlMode==="shadow") return "Cause: shadow mode, so sockets stay on the old always-on schedule";
+  if(!CFG.rules.aiPlugControl) return "Cause: AI plug control is switched off";
+  return "Cause: equipment left on standby";
+}
+function playbook(z, zs, key, al){
+  const rv = +CFG.rules.autoRevertOverrideMins || 0, P = [];
+  const notify = (at, text) => P.push({at, icon:"📣", text, run:()=>{}});
+  if(key==="empty"){
+    if(!zs.auto){ notify(0, `Alert sent to the ${z.name} room display and facilities app: “AC is on but the room is empty”`);
+      if(rv) P.push({at:rv, icon:"🤖", text:"Release the manual override: AI takes back control and switches the empty room off", run:()=>revertAC(z)}); }
+    else P.push({at:0, icon:"❄️", text:"Switch the AC off now instead of waiting for the 45-min empty rule", run:()=>{ zs.aiOff = true; }});
+  }
+  if(key==="over"){
+    if(!zs.auto){ notify(0, `Prompt on the ${z.name} thermostat: “Room is ${f1(zs.temp)} °C. Return to ${CFG.comfortSetpoint} °C?”`);
+      if(rv) P.push({at:rv, icon:"🤖", text:`No reply, so release the override and return to the ${CFG.comfortSetpoint} °C comfort setting`, run:()=>revertAC(z)}); }
+    else P.push({at:0, icon:"🌡️", text:"Stop boost cooling and hold the comfort setting", run:()=>{ zs.noBoost = true; }});
+  }
+  if(key==="afterov"){
+    notify(0, `“Still working?” prompt sent to ${z.name} and facilities`);
+    if(rv) P.push({at:Math.min(rv,15), icon:"🌙", text:"Nobody confirmed, so release the override; AI switches the AC off", run:()=>revertAC(z)});
+  }
+  if(key==="leak"){
+    P.push({at:0,  icon:"🛑", text:"Pause boost cooling, since extra cold air would just escape through the opening", run:()=>{ zs.noBoost = true; }});
+    P.push({at:1,  icon:"🧰", text:`Facilities ticket raised: check doors, windows and AC unit ${z.thermostatId||""} in ${z.name}`, run:()=>scheduleFix(zs)});
+    P.push({at:10, icon:"⬇️", text:"Cap AC output at 70% until the leak is fixed", run:()=>{ zs.cap = 0.7; }});
+    P.push({at:30, icon:"🚨", text:"Still leaking after 30 min: ticket escalated to urgent", run:()=>{}});
+  }
+  if(key==="phantom"){
+    const ids = al.circuits || [];
+    const locked = ids.some(id => S.plugs[id] && S.plugs[id].manual==="on");
+    const cut = () => ids.forEach(id => { const ps = S.plugs[id]; if(ps){ ps.manual = null; ps.exemptDate = null; ps.forceCut = true; } });
+    if(locked){ notify(0, `Facilities notified: sockets locked on in ${z.name} with nobody there`);
+      if(rv) P.push({at:Math.min(rv,15), icon:"🔌", text:"Release the manual lock and cut the circuit(s) via smart plug", run:cut}); }
+    else P.push({at:0, icon:"🔌", text:"Cut the circuit(s) via smart plug relay", run:cut});
+  }
+  return P;
+}
+function openCase(z, zs, al){
+  const c = { id:++S.caseSeq, date:simDate(), day:S.day, zoneId:z.id, zone:z.name, key:al.key, openAbs:absNow(), openT:S.t,
+    status:"active", absent:0, wasted:0, kWBefore: al.key==="phantom" ? al.kw : zs.kW, circuits: al.circuits || [],
+    lastText: al.text, steps:[], plan:[], lastActor:null };
+  addStep(c, "detect", "📡", `Detected by ${LEAK_INFO[al.key].sensors}: ${al.text}`);
+  addStep(c, "diagnose", "🧠", diagnose(z, zs, al.key, al));
+  c.plan = playbook(z, zs, al.key, al);
+  S.cases.unshift(c); if(S.cases.length > 400) S.cases.pop();
+  zs.d.leaks++;
+  addAction(z, `⚠ ${LEAK_INFO[al.key].title}: ${al.text}`, "alert");
+}
+function runPlan(c, i, actor){
+  const p = c.plan[i]; if(!p || p.done) return;
+  p.done = true; p.run(); c.lastActor = actor;
+  addStep(c, actor==="AI" ? "action" : "manual", p.icon, p.text, actor==="AI" ? "AI" : "You");
+  const z = zoneById(c.zoneId);
+  addAction(z, `🛠 ${p.text}`, actor==="AI" ? "ai" : "manual");
+  if(z){ applyNow(z); plugsIn(z.id).forEach(pc => applyPlug(pc, periodOf(S.t))); }
+}
+function caseKW(c, z, zs, al){
+  if(c.key==="phantom") return al ? al.kw : c.circuits.reduce((s,id) => s + (S.plugs[id] ? S.plugs[id].kW : 0), 0);
+  return c.key==="leak" ? zs.kW*0.5 : zs.kW;
+}
+function resolveCase(c, z, zs){
+  c.status = "resolved"; c.closedAbs = absNow(); c.closedDay = S.day;
+  const after = c.kWPending!=null ? c.kWPending : caseKW(c, z, zs, null);
+  c.kWAfter = after;
+  const dur = Math.max(1, c.closedAbs - c.openAbs - 3);
+  const drop = Math.max(0, c.kWBefore - after);
+  const by = c.lastActor==="Manual" ? "you / facilities" : c.lastActor==="AI" ? "ThermaSense AI" : "a change in conditions (e.g. people came back)";
+  c.resolvedBy = c.lastActor==="Manual" ? "Manual" : c.lastActor==="AI" ? "AI" : "Conditions";
+  addStep(c, "verify", "✅", `Verified by power meter: ${c.key==="phantom" ? "socket" : "AC"} power ${f2(c.kWBefore)} → ${f2(after)} kW. Leak lasted ${dur} min and wasted ${c.wasted.toFixed(2)} kWh. Fixed by ${by}.`, "Check");
+  if(!S.cases.some(o => o!==c && o.zoneId===z.id && o.key==="leak" && (o.status==="active"||o.status==="snoozed"))){ zs.cap = 1; zs.noBoost = false; }
+  addAction(z, `✅ Leak closed (${LEAK_INFO[c.key].short}): ${f2(drop)} kW recovered`, "ai");
+}
+function updateCases(){
+  const now = absNow(), autoOK = CFG.rules.aiLeakResponse && CFG.controlMode!=="shadow";
+  S.cases.forEach(c => {
+    if(c.status!=="active" && c.status!=="snoozed") return;
+    const z = zoneById(c.zoneId);
+    if(!z){ c.status = "dismissed"; c.closedDay = S.day; return; }
+    const zs = S.zones[z.id], al = zs.alerts.find(a => a.key===c.key);
+    if(al){ c.absent = 0; c.lastText = al.text; c.wasted += caseKW(c, z, zs, al)/60; if(al.circuits) c.circuits = al.circuits; }
+    else { c.absent++; if(c.absent===1) c.kWPending = caseKW(c, z, zs, null); }
+    if(c.absent >= 3){ resolveCase(c, z, zs); return; }
+    if(c.status==="snoozed"){
+      if(now >= c.snoozeUntil){ c.status = "active"; addStep(c, "info", "⏰", "Snooze ended, so the AI resumes its response"); }
+      else return;
+    }
+    if(autoOK) c.plan.forEach((p,i) => { if(!p.done && now - c.openAbs >= p.at) runPlan(c, i, "AI"); });
+  });
+}
+function caseAct(id, act){
+  const c = S.cases.find(x => x.id===id); if(!c) return;
+  const z = zoneById(c.zoneId); if(!z) return;
+  const zs = S.zones[z.id], today = simDate();
+  if(act.startsWith("run:")){ runPlan(c, parseInt(act.slice(4)), "Manual"); return; }
+  let text = "";
+  if(act==="acoff"){ if(!zs.auto) zs.overrideOn = false; else zs.aiOff = true; text = "❄️ AC switched off"; }
+  if(act==="eco"){ zs.auto = false; zs.override = 26; zs.overrideOn = true; text = "🌿 Room set to eco 26 °C (manual)"; }
+  if(act==="revert"){ revertAC(z); text = "🤖 Room returned to AI control"; }
+  if(act==="ticket"){ scheduleFix(zs); text = `🧰 Facilities ticket raised for ${z.name}`; }
+  if(act==="fixed"){ zs.leak = 0; zs.leakFixAt = null; text = "✅ Marked as fixed by facilities; waiting for the sensors to confirm"; }
+  if(act==="cutplugs"){ c.circuits.forEach(pid => { const ps = S.plugs[pid]; if(ps){ ps.manual = null; ps.exemptDate = null; ps.forceCut = true; } }); text = "🔌 Sockets cut"; }
+  if(act==="allow"){
+    if(c.key==="phantom") c.circuits.forEach(pid => { const ps = S.plugs[pid]; if(ps){ ps.manual = null; ps.exemptDate = today; } });
+    S.suppress[z.id+"|"+c.key] = today;
+    c.status = "dismissed"; c.closedAbs = absNow(); c.closedDay = S.day;
+    text = "👍 Marked as expected use, not a leak (ignored until midnight)";
+  }
+  if(act==="snooze"){ c.status = "snoozed"; c.snoozeUntil = absNow() + 60; text = "💤 Snoozed for 1 hour; AI steps paused"; }
+  if(act==="resume"){ c.status = "active"; text = "▶ Resumed"; }
+  if(!text) return;
+  c.lastActor = "Manual";
+  addStep(c, "manual", "", text, "You");
+  addAction(z, text, "manual");
+  applyNow(z); plugsIn(z.id).forEach(pc => applyPlug(pc, periodOf(S.t)));
+}
+
+function addAction(z, text, kind){
+  S.actions.unshift({ date:simDate(), t:S.t, zone:z ? z.name : "Building", text, kind });
+  if(S.actions.length > 1500) S.actions.pop();
+}
+
+/* ---------- One simulated minute ---------- */
+function stepMinute(){
+  const t = S.t, s = sched(), period = periodOf(t), workday = period!=="nonwork";
+  const out = readOutsideTemp(t); S.outside = out;
+  const zones = CFG.zones, shadow = CFG.controlMode==="shadow";
+
+  zones.forEach(z => { const zs = S.zones[z.id]; zs.occ = readOccupancy(z, zs, t); });
+  const total = zones.reduce((a,z) => a + S.zones[z.id].occ, 0);
+  if(total > CFG.maxOccupancy){ const f = CFG.maxOccupancy/total; zones.forEach(z => { const zs = S.zones[z.id]; zs.occ = Math.floor(zs.occ*f); }); }
+
+  zones.forEach(z => {
+    const zs = S.zones[z.id];
+    zs.occHist.push(zs.occ); if(zs.occHist.length > 15) zs.occHist.shift();
+    zs.emptyMins = zs.occ===0 ? Math.min(zs.emptyMins+1, 9999) : 0;
+
+    const dec = decide(z, zs, t, out, period);
+    const shadowed = shadow && zs.auto;
+    const bOn = workday && t >= s.start-60 && t < s.end+120;
+    const key = `${dec.acOn?1:0}|${dec.setpoint}|${zs.cap}`;
+    if(key !== zs.cmdKey){
+      acCommands(z, zs, dec, shadowed);
+      if(shadowed && zs.cmdKey) addAction(z, `👁 Recommends ${dec.acOn ? f1(dec.setpoint)+" °C" : "AC off"} (not sent, shadow mode): ${dec.reasons[dec.reasons.length-1][1]}`, "ai");
+      zs.cmdKey = key;
+    }
+    let act = dec;
+    if(shadowed){
+      zs.rec = dec;
+      act = { setpoint:CFG.rules.baselineSetpoint, acOn:bOn, mode:"Shadow", power: bOn ? "Normal" : "Off", prediction:dec.prediction,
+        reasons:[["👁",`Shadow mode: the thermostat stays on its old fixed schedule (${bOn ? CFG.rules.baselineSetpoint+" °C" : "off"}). The AI would do the following:`], ...dec.reasons] };
+    } else zs.rec = null;
+
+    const changed = act.acOn!==zs.acOn || Math.abs(act.setpoint-zs.setpoint)>=0.5 || act.mode!==zs.mode;
+    if(changed && !shadowed){
+      const why = act.reasons[act.reasons.length-1][1];
+      addAction(z, act.acOn ? `AC set to ${f1(act.setpoint)} °C · power ${act.power}: ${why}` : `AC off: ${why}`, act.mode==="Manual" ? "manual" : "ai");
+      zs.d.adjustments++;
+    }
+    zs.setpoint = act.setpoint; zs.acOn = act.acOn; zs.mode = act.mode; zs.power = act.power;
+    zs.reasons = act.reasons; zs.prediction = act.prediction;
+
+    // simulated real-world heat leaks (door propped open, blinds up, etc.)
+    if(zs.leak > 0){
+      zs.leak--;
+      if(zs.leakFixAt && absNow() >= zs.leakFixAt){ zs.leak = 0; addAction(z, "🧰 Facilities: door/window closed (ticket completed)", "manual"); }
+      if(zs.leak===0) zs.leakFixAt = null;
+    } else if(period!=="closed" && period!=="nonwork" && Math.random() < 0.0003) zs.leak = 60 + Math.floor(Math.random()*60);
+
+    const r = roomPhysics(zs.temp, zs.setpoint, zs.acOn, zs.occ, z, out, zs.leak>0, shadowed ? 1 : zs.cap);
+    zs.temp = r.temp; zs.kW = r.kW; zs.removal = r.removal;
+
+    // Baseline: same room on the old fixed setpoint & fixed hours, for savings comparison
+    const b = roomPhysics(zs.baseTemp, CFG.rules.baselineSetpoint, bOn, zs.occ, z, out, zs.leak>0);
+    zs.baseTemp = b.temp; zs.baseKW = b.kW;
+  });
+
+  CFG.plugs.forEach(c => applyPlug(c, period));
+  zones.forEach(z => detectLeaks(z, S.zones[z.id], period));
+  updateCases();
+
+  zones.forEach(z => {
+    const zs = S.zones[z.id], d = zs.d, pl = plugsIn(z.id);
+    zs.plugKW = pl.reduce((a,c) => a + S.plugs[c.id].kW, 0);
+    zs.basePlugKW = pl.reduce((a,c) => a + S.plugs[c.id].baseKW, 0);
+    d.kWh += zs.kW/60; d.plugKWh += zs.plugKW/60; d.baseKWh += zs.baseKW/60; d.basePlugKWh += zs.basePlugKW/60;
+    const acAl = zs.alerts.filter(a => a.key!=="phantom");
+    if(acAl.length) d.wasteKWh += zs.kW/60 * (acAl.some(a => a.full) ? 1 : 0.5);
+    const ph = zs.alerts.find(a => a.key==="phantom");
+    if(ph){ d.wasteKWh += ph.kw/60; ph.circuits.forEach(id => { S.plugs[id].wasteKWh += S.plugs[id].kW/60; }); }
+    if(zs.occ > 0){ d.tempSum += zs.temp; d.tempN++; }
+    d.peakOcc = Math.max(d.peakOcc, zs.occ); d.personMins += zs.occ;
+  });
+  CFG.plugs.forEach(c => { const ps = S.plugs[c.id]; ps.kWh += ps.kW/60; ps.baseKWh += ps.baseKW/60; });
+
+  if(t % 5 === 0){
+    const zl = zones.map(z => S.zones[z.id]);
+    S.history.push({ t, out, inAvg: zl.reduce((a,z)=>a+z.temp,0)/Math.max(1,zl.length),
+      kW: zl.reduce((a,z)=>a+z.kW+z.plugKW,0), baseKW: zl.reduce((a,z)=>a+z.baseKW+z.basePlugKW,0) });
+  }
+  if(t % Math.max(1, +CFG.logIntervalMins||15) === 0) logRows(t, out);
+
+  S.t++;
+  if(S.t >= 1440) newDay();
+}
+
+const LOG_HEADER = ["date","time","day_type","building","floor","zone","zone_type","occupants","capacity","inside_temp_c","outside_temp_c",
+  "ac_setpoint_c","ac_status","mode","power_level","ac_power_kw","plug_power_kw","ac_energy_today_kwh","plug_energy_today_kwh",
+  "baseline_energy_today_kwh","leakage_today_kwh","active_alerts","predicted_empty","control_mode","ai_reasoning"];
+const PLUG_HEADER = ["date","time","day_type","floor","zone","circuit","circuit_type","essential","state","control","reason","power_kw","energy_today_kwh","baseline_energy_today_kwh","standby_waste_today_kwh"];
+function logRows(t, out){
+  const date = simDate(), dt = dayInfo().type;
+  CFG.zones.forEach(z => {
+    const zs = S.zones[z.id], d = zs.d;
+    S.log.push([date, fmtClock(t), dt, CFG.buildingName, z.floor||"", z.name, z.type, zs.occ, z.capacity, zs.temp.toFixed(2), out.toFixed(2),
+      zs.acOn ? zs.setpoint.toFixed(1) : "", zs.acOn ? "ON" : "OFF", zs.mode, zs.power, zs.kW.toFixed(3), zs.plugKW.toFixed(3),
+      d.kWh.toFixed(3), d.plugKWh.toFixed(3), (d.baseKWh+d.basePlugKWh).toFixed(3), d.wasteKWh.toFixed(3), zs.alerts.map(a=>a.label).join("; "),
+      zs.prediction ? `${zs.prediction.mins} min (${zs.prediction.why})` : "", CFG.controlMode, zs.reasons.map(r=>r[1]).join(" | ")]);
+  });
+  CFG.plugs.forEach(c => {
+    const z = zoneById(c.zoneId), ps = S.plugs[c.id]; if(!z) return;
+    S.plugLog.push([date, fmtClock(t), dt, z.floor||"", z.name, c.name, c.type, c.essential?"yes":"no", ps.state.toUpperCase(), ps.by, ps.why,
+      ps.kW.toFixed(3), ps.kWh.toFixed(3), ps.baseKWh.toFixed(3), ps.wasteKWh.toFixed(3)]);
+  });
+  if(S.log.length > 200000) S.log.splice(0, S.log.length-200000);
+  if(S.plugLog.length > 200000) S.plugLog.splice(0, S.plugLog.length-200000);
+}
+
+const DAILY_HEADER = ["date","day_type","building","floor","zone","zone_type","ac_kwh","plug_kwh","total_kwh","baseline_kwh","saved_kwh","saved_pct",
+  "leakage_kwh","cost","avg_temp_when_occupied_c","peak_occupancy","person_hours","ai_adjustments","leak_cases","status"];
+function zoneDayRow(date, dt, z, d, status){
+  const tot = d.kWh + d.plugKWh, base = d.baseKWh + d.basePlugKWh, saved = base - tot;
+  return [date, dt, CFG.buildingName, z.floor||"", z.name, z.type, d.kWh.toFixed(2), d.plugKWh.toFixed(2), tot.toFixed(2), base.toFixed(2), saved.toFixed(2),
+    base>0 ? (saved/base*100).toFixed(1) : "", d.wasteKWh.toFixed(2), (tot*CFG.tariffPerKWh).toFixed(2),
+    d.tempN ? (d.tempSum/d.tempN).toFixed(2) : "", d.peakOcc, (d.personMins/60).toFixed(1), d.adjustments, d.leaks, status];
+}
+function newDay(){
+  const date = simDate(), dt = dayInfo().type;
+  S.days.push(...CFG.zones.map(z => zoneDayRow(date, dt, z, S.zones[z.id].d, "complete")));
+  S.t = 0; S.day++; S.history = []; S.dayOffset = Math.random()*2.5-1;
+  if(S.dayTypeOverride!=="auto"){ S.dayTypeOverride = "auto"; const sel = $("#dayType"); if(sel) sel.value = "auto"; }
+  const wd = dayInfo().type==="workday";
+  CFG.zones.forEach(z => {
+    const zs = S.zones[z.id]; zs.d = freshDay();
+    if(!zs.auto){ zs.auto = true; addAction(z, "Manual override reset at midnight; AI back in control", "ai"); }
+    zs.meetings = (z.type==="meeting" && wd) ? genMeetings(z.capacity) : [];
+  });
+  CFG.plugs.forEach(c => { const ps = S.plugs[c.id]; ps.kWh = 0; ps.baseKWh = 0; ps.wasteKWh = 0; ps.manual = null; ps.forceCut = false; });
+  addAction(null, `New day started: ${simDate()} (${dayInfo().label})`, "info");
+}
+
+function applyNow(z){
+  const zs = S.zones[z.id], dec = decide(z, zs, S.t, S.outside, periodOf(S.t));
+  if(CFG.controlMode==="shadow" && zs.auto){ zs.rec = dec; return; }
+  zs.setpoint = dec.setpoint; zs.acOn = dec.acOn; zs.mode = dec.mode; zs.power = dec.power; zs.reasons = dec.reasons; zs.prediction = dec.prediction;
+}
+
+function jumpTo(target){
+  let steps = ((target - S.t) % 1440 + 1440) % 1440;
+  while(steps-- > 0) stepMinute();
+  render();
+}
+
+/* =====================================================================
+   4. RENDERING
+   ===================================================================== */
+function setHTML(el, html){ if(S.hold || !el) return; if(el._h !== html){ el.innerHTML = html; el._h = html; } }
+const activeCases = () => S.cases.filter(c => c.status==="active" || c.status==="snoozed");
+
+function render(){
+  if(!CFG.zones.length) return;
+  $("#bName").textContent = CFG.buildingName;
+  $("#clock").textContent = fmtClock(S.t);
+  const p = periodOf(S.t), per = $("#period");
+  per.textContent = periodLabel(p); per.className = "period " + p;
+  const d = dateObj();
+  $("#dayLabel").textContent = `${DAYS[d.getDay()]} ${simDate()} · ${dayInfo().label}`;
+  const mp = $("#modePill");
+  mp.textContent = CFG.controlMode==="shadow" ? "👁 Shadow mode" : "● Live control";
+  mp.className = "pill " + (CFG.controlMode==="shadow" ? "pill-shadow" : "pill-live");
+  const n = activeCases().filter(c => c.status==="active").length;
+  $("#leakBadge").textContent = n ? String(n) : "";
+  renderKPIs();
+  if(S.tab==="overview"){ renderPlan(); renderDetail(); renderFeed(); renderCharts(); }
+  if(S.tab==="leaks") renderLeaks();
+  if(S.tab==="plugs") renderPlugs();
+  if(S.tab==="how") renderHow();
+  if(S.tab==="data") renderExportInfo();
+}
+
+function kpi(label, value, sub, cls, extra, attrs){
+  return `<div class="kpi ${cls||""}" ${attrs||""}><div class="kl">${label}</div><div class="kv">${value}</div><div class="ks">${sub}</div>${extra||""}</div>`;
+}
+function totals(){
+  const zl = CFG.zones.map(z => S.zones[z.id]);
+  const o = { occ:0, ac:0, plug:0, bac:0, bplug:0, kWh:0, bkWh:0, waste:0, plugKWh:0, bPlugKWh:0 };
+  zl.forEach(z => { o.occ += z.occ; o.ac += z.kW; o.plug += z.plugKW; o.bac += z.baseKW; o.bplug += z.basePlugKW;
+    o.kWh += z.d.kWh + z.d.plugKWh; o.bkWh += z.d.baseKWh + z.d.basePlugKWh; o.waste += z.d.wasteKWh; o.plugKWh += z.d.plugKWh; o.bPlugKWh += z.d.basePlugKWh; });
+  o.temps = zl.map(z => z.temp);
+  return o;
+}
+function renderKPIs(){
+  const T = totals(), max = CFG.maxOccupancy, avgIn = T.temps.reduce((a,b)=>a+b,0)/T.temps.length;
+  const saved = T.bkWh - T.kWh, pct = T.bkWh>0 ? saved/T.bkWh*100 : 0, act = activeCases().length;
+  const R = CFG.rules, hot = S.outside >= R.hotDayThreshold, cur = esc(CFG.currency);
+  setHTML($("#kpis"), [
+    kpi("☀️ Outside", `${f1(S.outside)}<small> °C</small>`, hot ? "🔥 Hot day: occupied rooms won't be warmed up" : `Hot-day threshold ${R.hotDayThreshold} °C`, hot?"hot":""),
+    kpi("🌡️ Inside (average)", `${f1(avgIn)}<small> °C</small>`, `Rooms ${f1(Math.min(...T.temps))}–${f1(Math.max(...T.temps))} °C · comfort ${CFG.comfortSetpoint} °C`),
+    kpi("👥 Occupancy", `${T.occ}<small> / ${max}</small>`, `${Math.round(T.occ/max*100)}% of building capacity`, "", `<div class="bar"><i style="width:${Math.min(100,T.occ/max*100)}%"></i></div>`),
+    kpi("⚡ Power now", `${f1(T.ac+T.plug)}<small> kW</small>`, `AC ${f1(T.ac)} kW · plugs ${f1(T.plug)} kW (old schedule: ${f1(T.bac+T.bplug)} kW)`),
+    kpi("🔋 Energy today", `${T.kWh.toFixed(0)}<small> kWh</small>`, `≈ ${cur}${(T.kWh*CFG.tariffPerKWh).toFixed(2)} so far`),
+    kpi("🌱 Saved today", `${saved.toFixed(0)}<small> kWh</small>`, `${pct.toFixed(0)}% less than the old schedule · ${cur}${(saved*CFG.tariffPerKWh).toFixed(2)}`, saved>=0?"good":""),
+    kpi("🚨 Energy leaks", `${act}<small> open</small>`, `${T.waste.toFixed(1)} kWh wasted today · click to see the fixes`, act?"bad":"", "", `data-tab="leaks" role="button" tabindex="0"`)
+  ].join(""));
+}
+
+function zoneColor(z, zs){
+  let v, h;
+  if(S.view==="occ"){ v = zs.occ/Math.max(1,z.capacity); return { c:`hsl(265 55% ${45-10*v}%)`, bg:`hsl(265 70% ${97-22*v}%)`, bga:`hsl(265 70% ${94-26*v}% / .8)` }; }
+  if(S.view==="energy"){ v = clamp(zs.kW/Math.max(0.1,z.ratedKW),0,1); h = 150-150*v; return { c:`hsl(${h} 65% 38%)`, bg:`hsl(${h} 75% ${96-8*v}%)`, bga:`hsl(${h} 75% ${90-10*v}% / .8)` }; }
+  v = clamp((zs.temp-21)/7,0,1); h = 205-195*v;
+  return { c:`hsl(${h} 70% 40%)`, bg:`hsl(${h} 80% 93%)`, bga:`hsl(${h} 80% 88% / .8)` };
+}
+function heatBlobs(z, zs){
+  if(S.view==="energy" || zs.occ===0) return "none";
+  const rng = seeded(hash(z.id)), n = Math.min(10, Math.ceil(zs.occ/3)), ratio = zs.occ/Math.max(1,z.capacity), g = [];
+  const col = S.view==="occ" ? "124,58,237" : "255,86,48";
+  for(let i=0;i<n;i++){
+    const x = 8+rng()*84, y = 30+rng()*60, r = 26+rng()*26, a = (0.22+0.3*ratio).toFixed(2);
+    g.push(`radial-gradient(circle at ${x.toFixed(0)}% ${y.toFixed(0)}%, rgba(${col},${a}) 0, rgba(${col},0) ${r.toFixed(0)}px)`);
+  }
+  return g.join(",");
+}
+function renderPlan(){
+  const floors = [...new Set(CFG.zones.map(z => z.floor || "Main"))];
+  if(!floors.includes(S.floor)) S.floor = floors[0];
+  setHTML($("#floorTabs"), floors.length>1 ? floors.map(f => `<button data-floor="${esc(f)}" class="${f===S.floor?"on":""}">${esc(f)}</button>`).join("") : "");
+  const zones = CFG.zones.filter(z => (z.floor||"Main")===S.floor);
+  const usePlan = S.layout==="plan";
+  document.querySelectorAll("#layoutSeg button").forEach(b => b.classList.toggle("on", b.dataset.layout===S.layout));
+  $("#plan").hidden = usePlan; $("#planView").hidden = !usePlan;
+  if(usePlan) renderPlanView(zones);
+  else setHTML($("#plan"), zones.map(z => {
+    const zs = S.zones[z.id], col = zoneColor(z, zs), chips = [];
+    const cases = activeCases().filter(c => c.zoneId===z.id);
+    if(zs.prediction) chips.push(`<span class="chip pred">🔮 Empty in ~${zs.prediction.mins} min</span>`);
+    if(cases.length) chips.push(`<span class="chip alert">⚠ ${esc(LEAK_INFO[cases[0].key].short)}</span>`);
+    if(cases.some(c => c.steps.some(s => s.kind==="action"||s.kind==="manual"))) chips.push(`<span class="chip fix">🛠 Fixing</span>`);
+    if(!zs.auto) chips.push(`<span class="chip manual">✋ Manual</span>`);
+    return `<button class="zone ${z.capacity>=16?"wide":""} ${S.selected===z.id?"sel":""}" data-zone="${z.id}" style="--c:${col.c};--bgc:${col.bg};background-image:${heatBlobs(z,zs)}" aria-label="${esc(z.name)}, ${f1(zs.temp)} degrees, ${zs.occ} people">
+      <div class="zt"><span class="zn">${esc(z.name)}</span><span class="pw pw-${zs.power.toLowerCase()}">${zs.power}</span></div>
+      <div class="zv">${f1(zs.temp)}<small> °C</small></div>
+      <div class="chips">${chips.join("")}</div>
+      <div class="zm"><span>👥 ${zs.occ}/${z.capacity}</span><span>❄ ${zs.acOn ? f1(zs.setpoint)+" °C" : "off"}</span><span>🔌 ${f1(zs.plugKW)} kW</span></div>
+    </button>`;
+  }).join(""));
+  const L = {
+    temp: ["Cool 21 °C", "linear-gradient(90deg,hsl(205 80% 60%),hsl(110 70% 50%),hsl(40 90% 55%),hsl(10 80% 55%))", "Warm 28 °C", "Red glow = body heat from people"],
+    occ:  ["Empty", "linear-gradient(90deg,hsl(265 70% 97%),hsl(265 70% 75%))", "Full", "Purple glow = people detected"],
+    energy:["Idle", "linear-gradient(90deg,hsl(150 70% 45%),hsl(75 70% 45%),hsl(0 70% 50%))", "Full power", "Share of each AC unit's rated power"]
+  }[S.view];
+  setHTML($("#legend"), `${S.layout==="plan" ? "<span>⚠️ leak · ✋ manual · 🔮 emptying soon ·</span>" : ""}<span>${L[0]}</span><span class="grad" style="background:${L[1]}"></span><span>${L[2]}</span><span style="margin-left:auto">${L[3]}</span>`);
+}
+
+/* ---------- Floor plan view ---------- */
+function samplePlan(floor, zones, blank){
+  const zs = zones.filter(z => (z.floor||"Main")===floor && z.plan);
+  if(!zs.length && !blank) return null;
+  const rooms = zs.map(z => `<rect x="${z.plan.x*10}" y="${z.plan.y*6}" width="${z.plan.w*10}" height="${z.plan.h*6}" fill="#fafbfc" stroke="#8b95a3" stroke-width="3"/>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600"><rect width="1000" height="600" fill="#ffffff"/><defs><pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#eef1f4" stroke-width="1"/></pattern></defs><rect width="1000" height="600" fill="url(#g)"/><rect x="8" y="8" width="984" height="584" fill="none" stroke="#475467" stroke-width="6"/>${rooms}</svg>`;
+  return { src:"data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), w:1000, h:600, source: blank ? "Blank layout" : "Sample layout", sample:!blank };
+}
+function planFor(floor, plans, zones){
+  const p = (plans || CFG.floorplans || {})[floor];
+  if(p && p.img) return { src:p.img, w:p.w, h:p.h, source:p.source || "Uploaded plan", sample:false };
+  return samplePlan(floor, zones || CFG.zones);
+}
+function renderPlanView(zones){
+  const plan = planFor(S.floor), wrap = $("#fpWrap"), empty = $("#fpEmpty");
+  if(!plan){
+    wrap.hidden = true; empty.hidden = false;
+    setHTML(empty, `<div style="font-size:28px">🗺</div><div><b style="color:var(--ink)">No floor plan for ${esc(S.floor)} yet.</b><br>Upload the floor plan as a PDF (or PNG/JPG), then drag each room into place.</div>
+      <div class="ctrl" style="justify-content:center"><button class="btn primary" data-fp="upload">📄 Upload floor plan (PDF)</button><button class="btn" data-layout="grid">Show rooms as a grid</button></div>`);
+    setHTML($("#fpMiss"), "");
+    return;
+  }
+  wrap.hidden = false; empty.hidden = true;
+  const img = $("#fpImg");
+  if(img._src !== plan.src){ img.src = plan.src; img._src = plan.src; }
+  $("#fpSrc").textContent = plan.sample ? "Sample layout: upload your floor plan PDF to replace it" : "Floor plan: " + plan.source;
+  const placed = zones.filter(z => z.plan), missing = zones.filter(z => !z.plan);
+  setHTML($("#fpZones"), placed.map(z => {
+    const zs = S.zones[z.id], col = zoneColor(z, zs), p = z.plan;
+    const hasCase = activeCases().some(c => c.zoneId===z.id);
+    const flag = hasCase ? "⚠️" : !zs.auto ? "✋" : zs.prediction ? "🔮" : "";
+    return `<button class="fpz ${S.selected===z.id?"sel":""}" data-zone="${z.id}" style="left:${p.x}%;top:${p.y}%;width:${p.w}%;height:${p.h}%;--c:${col.c};--bga:${col.bga};background-image:${heatBlobs(z,zs)}" title="${esc(z.name)}: ${f1(zs.temp)} °C, ${zs.occ} of ${z.capacity} people, AC ${zs.acOn ? f1(zs.setpoint)+" °C" : "off"}">
+      <span class="n">${esc(z.name)}</span><span class="v">${f1(zs.temp)}°</span><span class="m">👥 ${zs.occ}/${z.capacity} · ❄ ${zs.acOn ? f1(zs.setpoint)+"°" : "off"} · 🔌 ${f1(zs.plugKW)} kW</span>${flag ? `<span class="fl">${flag}</span>` : ""}</button>`;
+  }).join(""));
+  setHTML($("#fpMiss"), missing.length ? `<span>Not placed on the plan yet: <b>${missing.map(z => esc(z.name)).join(", ")}</b></span><button class="btn sm" data-fp="edit">✏️ Place them</button>` : "");
+}
+
+function thermoWidget(z, zs){
+  const ring = !zs.acOn ? "#98a2b3" : zs.mode==="Manual" ? "#3b82f6" : zs.power==="Eco" ? "#22c55e" : zs.power==="Boost" ? "#f97316" : "#2dd4bf";
+  const last = zs.lastCmd;
+  const ctl = !zs.auto ? "✋ Manual override (set at the wall thermostat or in this app)" :
+    CFG.controlMode==="shadow" ? "👁 Shadow mode: the old fixed schedule is in control; the AI only watches" : "🤖 Controlled by ThermaSense";
+  return `<div class="thermo"><div class="tface" style="--ring:${ring}"><span class="t1">${zs.acOn ? "COOLING" : "OFF"}</span><span class="sp">${zs.acOn ? f1(zs.setpoint)+"°" : "––"}</span><span class="rm">Room ${f1(zs.temp)}°</span></div>
+    <div class="tmeta"><b>Wall thermostat ${esc(z.thermostatId||"")}</b>
+    <span>🔗 ${esc(z.protocol)} · address ${esc(z.address)} · <span class="ok">● Online</span></span>
+    <span>${ctl}</span>
+    <span class="muted">${last ? `Last command ${fmtClock(last.t)}: ${esc(last.op)} → ${esc(last.value)} · ${esc(last.status)}${last.ms ? " · "+last.ms+" ms" : ""}` : "No commands sent yet"}</span>
+    <button class="btn sm" data-goto="how" style="justify-self:start;margin-top:2px">See how this connects →</button></div></div>`;
+}
+function plugButtons(c, ps){
+  if(c.essential) return `<span class="tag">🔒 Never cut</span>`;
+  const b = [];
+  if(ps.state==="on") b.push(`<button class="btn sm" data-pact="cut" data-plug="${c.id}">⏻ Cut</button>`);
+  else b.push(`<button class="btn sm" data-pact="on" data-plug="${c.id}">⚡ Restore</button>`);
+  if(ps.exemptDate!==simDate()) b.push(`<button class="btn sm" data-pact="keep" data-plug="${c.id}" title="Don't cut tonight">☀ Keep on tonight</button>`);
+  if(ps.manual || ps.exemptDate===simDate() || ps.forceCut) b.push(`<button class="btn sm blue" data-pact="ai" data-plug="${c.id}">🤖 Back to AI</button>`);
+  return b.join(" ");
+}
+function plugChip(c, ps){
+  if(c.essential) return `<span class="tag good">On (essential)</span>`;
+  if(ps.state==="off") return `<span class="tag cut">Cut</span>`;
+  if(CFG.controlMode==="shadow" && ps.by==="AI" && ps.want==="off") return `<span class="tag shadow">On (AI would cut)</span>`;
+  if(ps.manual==="on") return `<span class="tag manual">Locked on</span>`;
+  return `<span class="tag good">On</span>`;
+}
+function renderDetail(){
+  let z = CFG.zones.find(z => z.id===S.selected) || CFG.zones[0];
+  S.selected = z.id;
+  const zs = S.zones[z.id], d = zs.d;
+  const modeCls = zs.mode==="Manual" ? "manual" : zs.mode==="Shadow" ? "shadow" : !zs.acOn ? "off" : "";
+  const saved = (d.baseKWh + d.basePlugKWh) - (d.kWh + d.plugKWh);
+  let ctrl;
+  if(zs.auto){
+    ctrl = `<div class="ctrl"><button class="btn" data-act="manual">✋ Take manual control</button></div>
+      <p class="hint">${CFG.controlMode==="shadow" ? "Shadow mode: the AI's choices are logged but not sent to the thermostat." : "The AI is managing this room. Manual changes are logged and flagged if they waste energy."}</p>`;
+  } else {
+    ctrl = `<div class="ctrl">
+        <div class="stepper"><button data-act="down" aria-label="Lower temperature">−</button><span>${f1(zs.override)} °C</span><button data-act="up" aria-label="Raise temperature">+</button></div>
+        <button class="btn" data-act="power">${zs.overrideOn ? "Turn AC off" : "Turn AC on"}</button>
+        <button class="btn primary" data-act="auto">🤖 Return to AI control</button>
+      </div><p class="hint">Manual overrides reset at midnight. If one wastes energy, the AI releases it after ${CFG.rules.autoRevertOverrideMins||"—"} min.</p>`;
+  }
+  const cases = activeCases().filter(c => c.zoneId===z.id);
+  const meetings = z.type==="meeting" ? `<h3>Bookings today</h3>${zs.meetings.length ? `<ul class="list">${zs.meetings.map(m => {
+      const cls = S.t>=m.end ? "past" : S.t>=m.start ? "now" : "";
+      return `<li class="${cls}"><span>${fmtClock(m.start)}–${fmtClock(m.end)}</span><span>${m.people} people${cls==="now"?" · now":""}</span></li>`; }).join("")}</ul>` : `<p class="hint">No bookings today.</p>`}` : "";
+  const pl = plugsIn(z.id);
+  const plugs = pl.length ? `<h3>Sockets &amp; plug loads</h3><ul class="list">${pl.map(c => { const ps = S.plugs[c.id];
+      return `<li><span>${c.essential?"🔒":"🔌"} ${esc(c.name)} ${plugChip(c,ps)}</span><span class="r">${f2(ps.kW)} kW ${plugButtons(c,ps)}</span></li>`; }).join("")}</ul>` : "";
+  setHTML($("#detail"), `
+    <div class="dhead"><div><div class="muted" style="font-size:12px">${esc(z.floor||"")} · ${TYPE_LABEL[z.type]||z.type}</div><h2>${esc(z.name)}</h2></div><span class="mode ${modeCls}">${esc(zs.mode)}</span></div>
+    <div class="stats">
+      <div class="stat"><div class="l">Inside</div><div class="v">${f1(zs.temp)}<small> °C</small></div></div>
+      <div class="stat"><div class="l">Outside</div><div class="v">${f1(S.outside)}<small> °C</small></div></div>
+      <div class="stat"><div class="l">Occupancy</div><div class="v">${zs.occ}<small> / ${z.capacity}</small></div><div class="bar"><i style="width:${zs.occ/z.capacity*100}%"></i></div></div>
+      <div class="stat"><div class="l">Power: AC · plugs</div><div class="v">${f1(zs.kW)}<small> · ${f1(zs.plugKW)} kW</small></div></div>
+    </div>
+    ${thermoWidget(z, zs)}
+    ${zs.prediction ? `<div class="note pred">🔮 <b>Emptying soon:</b> ~${zs.prediction.mins} min (${esc(zs.prediction.why)}). AC and power already turned down.</div>` : ""}
+    ${cases.map(c => `<div class="note alert"><span>⚠ <b>${esc(LEAK_INFO[c.key].short)}:</b> ${esc(c.lastText)}</span><button class="btn sm" data-tab="leaks">See the AI's fix →</button></div>`).join("")}
+    <h3>Why the AI chose this</h3>
+    <ul class="reasons">${zs.reasons.map(r => `<li><span>${r[0]}</span><span>${esc(r[1])}</span></li>`).join("")}</ul>
+    <h3>AC control</h3>${ctrl}
+    ${plugs}
+    <h3>Today</h3>
+    <div class="stats" style="margin-top:0">
+      <div class="stat"><div class="l">Energy used (AC + plugs)</div><div class="v">${(d.kWh+d.plugKWh).toFixed(1)}<small> kWh</small></div></div>
+      <div class="stat"><div class="l">Saved vs old schedule</div><div class="v" style="color:${saved>=0?"var(--accent)":"var(--bad)"}">${saved.toFixed(1)}<small> kWh</small></div></div>
+      <div class="stat"><div class="l">Energy leakage</div><div class="v" style="color:${d.wasteKWh>0.05?"var(--bad)":"inherit"}">${d.wasteKWh.toFixed(1)}<small> kWh</small></div></div>
+      <div class="stat"><div class="l">AI adjustments</div><div class="v">${d.adjustments}</div></div>
+    </div>
+    ${meetings}`);
+}
+
+function renderFeed(){
+  const items = S.actions.slice(0, 80);
+  setHTML($("#feed"), items.length ? items.map(a =>
+    `<li class="${a.kind}"><time>${fmtClock(a.t)}</time><div><b>${esc(a.zone)}</b> · ${esc(a.text)}</div></li>`).join("") : `<li class="empty">No actions yet.</li>`);
+}
+
+/* ---------- Leaks tab ---------- */
+function caseButtons(c, zs){
+  const b = [];
+  if(c.key==="phantom") b.push(["cutplugs","🔌 Cut these sockets now"],["allow","👍 Allow tonight (expected)"],["ticket","🧰 Send facilities ticket"]);
+  else {
+    b.push(["acoff","❄️ Switch AC off"],["eco","🌿 Set eco 26 °C"]);
+    if(!zs.auto) b.push(["revert","🤖 Return room to AI"]);
+    b.push(["ticket","🧰 Send facilities ticket"]);
+    if(c.key==="leak") b.push(["fixed","✅ Mark as fixed"]);
+    b.push(["allow","👍 Expected, ignore today"]);
+  }
+  b.push(c.status==="snoozed" ? ["resume","▶ Resume"] : ["snooze","💤 Snooze 1 h"]);
+  return b.map(([a,l]) => `<button class="btn sm" data-case="${c.id}" data-cact="${a}">${l}</button>`).join("");
+}
+function stepLi(s){ return `<li class="${s.kind}"><time>${fmtClock(s.t)}</time>${s.who ? `<span class="who">${esc(s.who)}</span>` : ""}${s.icon ? s.icon+" " : ""}${esc(s.text)}</li>`; }
+function caseCard(c){
+  const info = LEAK_INFO[c.key], z = zoneById(c.zoneId), zs = S.zones[c.zoneId], now = absNow();
+  const autoOK = CFG.rules.aiLeakResponse && CFG.controlMode!=="shadow";
+  const mins = now - c.openAbs;
+  const statusTag = c.status==="snoozed" ? `<span class="tag">💤 Snoozed until ${fmtClock(c.snoozeUntil%1440)}</span>` :
+    c.plan.every(p => p.done) ? `<span class="tag bad">Watching: waiting for sensors to confirm the fix</span>` :
+    autoOK ? `<span class="tag good">🤖 AI responding</span>` : `<span class="tag manual">Waiting for you: recommendations only</span>`;
+  const pending = c.plan.map((p,i) => ({p,i})).filter(x => !x.p.done);
+  const plan = pending.map(x => `<li class="plan"><time>${fmtClock(c.openT + x.p.at)}</time><span class="who">Next</span>${x.p.icon} ${esc(x.p.text)} <button class="btn sm" data-case="${c.id}" data-cact="run:${x.i}">Do it now</button></li>`).join("");
+  const kw = zs ? caseKW(c, z, zs, zs.alerts.find(a=>a.key===c.key)) : 0;
+  return `<article class="case ${c.status}">
+    <div class="chd"><div><b>${info.icon} ${esc(info.title)}</b> · <span>${esc(c.zone)}</span>
+      <div class="cmeta">Open ${mins} min (since ${fmtClock(c.openT)}) · wasting ~${f2(kw)} kW now · ${c.wasted.toFixed(2)} kWh so far</div></div>${statusTag}</div>
+    <ul class="tl">${c.steps.map(stepLi).join("")}${plan}</ul>
+    <div class="cact"><span class="lbl">Act yourself:</span>${caseButtons(c, zs)}</div>
+  </article>`;
+}
+function renderLeaks(){
+  const act = activeCases();
+  const done = S.cases.filter(c => (c.status==="resolved"||c.status==="dismissed") && c.closedDay===S.day);
+  const res = done.filter(c => c.status==="resolved");
+  const byAI = res.filter(c => c.resolvedBy==="AI").length, byYou = res.filter(c => c.resolvedBy==="Manual").length;
+  const T = totals(), avgFix = res.length ? Math.round(res.reduce((s,c) => s + Math.max(1, c.closedAbs - c.openAbs - 3), 0)/res.length) : 0;
+  setHTML($("#leakStats"), [
+    kpi("Open leaks", `${act.length}`, act.length ? act.map(c => LEAK_INFO[c.key].icon).join(" ") : "Nothing leaking right now", act.length?"bad":"good"),
+    kpi("Fixed today", `${res.length}`, `${byAI} by AI · ${byYou} by you · ${res.length-byAI-byYou} cleared on their own`),
+    kpi("Energy wasted today", `${T.waste.toFixed(1)}<small> kWh</small>`, `≈ ${esc(CFG.currency)}${(T.waste*CFG.tariffPerKWh).toFixed(2)}`),
+    kpi("Average time to fix", `${avgFix}<small> min</small>`, "From detection to confirmed by the power meter", "good")
+  ].map(h => h.replace('class="kpi', 'class="kpi mini')).join(""));
+  const on = CFG.rules.aiLeakResponse, shadow = CFG.controlMode==="shadow";
+  setHTML($("#leakMode"), shadow ? `<span class="tag shadow">👁 Shadow mode: AI recommends only</span> <button class="btn sm" data-mode="live">Switch to live control</button>` :
+    `<span class="tag ${on?"good":"manual"}">AI leak response: ${on ? "automatic" : "off, recommendations only"}</span> <button class="btn sm" data-pall="leaktoggle">${on ? "Turn off" : "Turn on"}</button>`);
+  setHTML($("#activeCases"), act.length ? act.map(caseCard).join("") : `<div class="empty">🎉 No open leaks. The AI checks every room and circuit once a minute.<br>Use “Try it: create a leak” below to watch it respond.</div>`);
+  setHTML($("#resolvedCases"), done.length ? done.slice(0, 40).map(c => {
+    const info = LEAK_INFO[c.key];
+    const who = c.status==="dismissed" ? `<span class="tag">Ignored</span>` : c.resolvedBy==="AI" ? `<span class="tag good">🤖 Fixed by AI</span>` : c.resolvedBy==="Manual" ? `<span class="tag manual">✋ Fixed by you</span>` : `<span class="tag">Cleared</span>`;
+    return `<details class="rcase" data-det="${c.id}" ${S.openDetails[c.id] ? "open" : ""}><summary><span>${info.icon} <b>${esc(info.short)}</b> · ${esc(c.zone)} <span class="muted">${fmtClock(c.openT)}–${fmtClock(c.closedAbs%1440)} · ${c.wasted.toFixed(2)} kWh wasted</span></span>${who}</summary><ul class="tl">${c.steps.map(stepLi).join("")}</ul></details>`;
+  }).join("") : `<div class="empty">No leaks closed yet today.</div>`);
+  if(!zoneById(S.simZone)) S.simZone = CFG.zones[0].id;
+  const sz = $("#simZone");
+  setHTML(sz, CFG.zones.map(z => `<option value="${z.id}">${esc(z.name)} (${S.zones[z.id].occ} people, AC ${S.zones[z.id].acOn ? "on" : "off"})</option>`).join(""));
+  if(document.activeElement!==sz) sz.value = S.simZone;
+  renderTable();
+}
+function renderTable(){
+  const rows = CFG.zones.map(z => ({z, zs:S.zones[z.id]})).sort((a,b) => b.zs.d.wasteKWh-a.zs.d.wasteKWh || (b.zs.d.kWh+b.zs.d.plugKWh)-(a.zs.d.kWh+a.zs.d.plugKWh));
+  const maxW = Math.max(0.1, ...rows.map(r => r.zs.d.wasteKWh));
+  setHTML($("#zoneTable"), `<thead><tr><th>Room</th><th>People</th><th>Inside</th><th>AC</th><th>AC power</th><th>Plug power</th><th>Used today</th><th>Saved</th><th>Leakage</th><th>Leak cases</th><th>Status</th></tr></thead><tbody>${
+    rows.map(({z,zs}) => {
+      const d = zs.d, saved = (d.baseKWh+d.basePlugKWh)-(d.kWh+d.plugKWh);
+      const status = zs.alerts.length ? `<span class="tag bad">⚠ ${esc(zs.alerts.map(a=>a.label).join(", "))}</span>` : !zs.auto ? `<span class="tag manual">✋ Manual</span>` : `<span class="tag">${esc(zs.mode)}</span>`;
+      return `<tr class="click" data-zone="${z.id}" data-go="overview"><td><b>${esc(z.name)}</b><div class="sub">${esc(z.floor||"")}</div></td>
+        <td>${zs.occ}/${z.capacity}</td><td>${f1(zs.temp)} °C</td><td>${zs.acOn ? f1(zs.setpoint)+" °C" : "Off"}</td><td>${f1(zs.kW)} kW</td><td>${f2(zs.plugKW)} kW</td>
+        <td>${(d.kWh+d.plugKWh).toFixed(1)} kWh</td><td class="${saved>=0?"pos":"neg"}">${saved.toFixed(1)} kWh</td>
+        <td><span class="leakbar"><i style="width:${(d.wasteKWh/maxW*100).toFixed(0)}%"></i></span>${d.wasteKWh.toFixed(2)} kWh</td><td>${d.leaks}</td><td>${status}</td></tr>`;
+    }).join("")}</tbody>`);
+  const top = rows[0];
+  $("#leakSummary").textContent = top && top.zs.d.wasteKWh > 0.05 ? `Biggest leak today: ${top.z.name} (${top.zs.d.wasteKWh.toFixed(2)} kWh)` : "No leakage recorded today";
+}
+
+/* ---------- Plugs tab ---------- */
+function schedBar(segs){
+  const now = `<i class="now" style="left:${(S.t/1440*100).toFixed(2)}%"></i>`;
+  return `<div class="sbar">${segs.map(([a,b,cls,label]) => `<span class="${cls}" style="width:${((b-a)/1440*100).toFixed(2)}%" title="${fmtClock(a)}–${b>=1440?"24:00":fmtClock(b)} ${esc(label)}">${(b-a)>=150 ? esc(label) : ""}</span>`).join("")}${now}</div>`;
+}
+function renderPlugs(){
+  const R = CFG.rules, s = sched(), di = dayInfo(), shadow = CFG.controlMode==="shadow";
+  const T = totals(), cut = CFG.plugs.filter(c => S.plugs[c.id].state==="off").length, ne = CFG.plugs.filter(c => !c.essential).length;
+  const waste = CFG.plugs.reduce((a,c) => a + S.plugs[c.id].wasteKWh, 0);
+  setHTML($("#plugStats"), [
+    kpi("🔌 Plug power now", `${f2(T.plug)}<small> kW</small>`, `Always-on sockets would draw ${f2(T.bplug)} kW`),
+    kpi("Plug energy today", `${T.plugKWh.toFixed(1)}<small> kWh</small>`, `≈ ${esc(CFG.currency)}${(T.plugKWh*CFG.tariffPerKWh).toFixed(2)}`),
+    kpi("Saved by switching off", `${(T.bPlugKWh-T.plugKWh).toFixed(1)}<small> kWh</small>`, "vs leaving everything on standby", "good"),
+    kpi("Circuits switched off now", `${cut}<small> / ${ne}</small>`, `${CFG.plugs.length-ne} essential circuits always on`),
+    kpi("Standby waste today", `${waste.toFixed(2)}<small> kWh</small>`, "Sockets left on in empty rooms", waste>0.05?"bad":"")
+  ].map(h => h.replace('class="kpi', 'class="kpi mini')).join(""));
+  const restore = s.start - R.plugRestoreLeadMins;
+  const wd = [[0,restore,"s-cut","Off"],[restore,s.end,"s-on","On (meeting-room AV off when empty)"],[s.end,1440,"s-cond","Off when room empty"]];
+  const nw = [[0,1440,"s-cut","Off all day, switched on only in rooms where people are detected"]];
+  setHTML($("#plugSchedule"), `<div class="sched">
+      <div class="srow ${di.type==="workday"?"today":""}"><b>Workdays</b>${schedBar(wd)}</div>
+      <div class="srow ${di.type==="weekend"?"today":""}"><b>Weekends</b>${schedBar(nw)}</div>
+      <div class="srow ${di.type==="holiday"?"today":""}"><b>Public holidays</b>${schedBar(nw)}</div>
+      <div class="saxis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+    </div>
+    <ul class="rules">
+      <li><b>Workdays:</b> non-essential sockets come on at ${fmtClock(restore)} (${R.plugRestoreLeadMins} min before ${CFG.schedule.officeStart}).</li>
+      <li><b>After ${CFG.schedule.officeEnd}:</b> each room's sockets are cut once its people counter has shown nobody for ${R.plugCutEmptyMins} min, so people working late keep power.</li>
+      <li><b>Meeting-room AV</b> is cut after ${R.avCutEmptyMins} min empty, even in office hours, and comes back 10 min before the next booking.</li>
+      <li><b>Weekends and public holidays:</b> off all day. If someone comes in, only their room is switched on.</li>
+      <li><b>Essential circuits</b> (fridge, security, network) are never cut.</li>
+      <li>Anything left on in an empty room after hours is flagged as a <b>phantom plug load</b> and handled on the Energy leaks tab.</li>
+      ${shadow ? `<li class="muted">👁 Shadow mode: sockets stay on and the AI only records what it would switch off.</li>` : ""}
+      ${!R.aiPlugControl ? `<li style="color:var(--bad)">AI plug control is OFF: sockets are left on.</li>` : ""}
+    </ul>`);
+  $("#plugAiBtn").textContent = R.aiPlugControl ? "🤖 AI plug control: ON" : "🤖 AI plug control: OFF";
+  const today = simDate();
+  const upcoming = (CFG.holidays||[]).filter(h => h.date >= today).sort((a,b) => a.date<b.date?-1:1).slice(0,6);
+  setHTML($("#plugCal"), `<p style="font-size:13px;margin:8px 0">Today is a <b>${esc(di.label.toLowerCase())}</b>${S.dayTypeOverride!=="auto" ? " (preview set in the top bar)" : ""}.</p>
+    <p class="muted" style="font-size:12.5px;margin:0 0 6px">Working days</p>
+    <div class="pchips">${DAYS.map((d,i) => `<span class="tag ${(CFG.workDays||[]).includes(i)?"good":""}">${d}</span>`).join("")}</div>
+    <p class="muted" style="font-size:12.5px;margin:12px 0 6px">Upcoming public holidays / closures</p>
+    ${upcoming.length ? `<ul class="list">${upcoming.map(h => `<li><span>${esc(h.date)}</span><span>${esc(h.name||"")}</span></li>`).join("")}</ul>` : `<p class="hint">None listed.</p>`}
+    <p class="hint">Edit working days and holidays in ⚙ Building setup.</p>`);
+  setHTML($("#plugTable"), `<thead><tr><th>Circuit</th><th>State</th><th>Power now</th><th>Today</th><th>Saved</th><th>Controlled by</th><th>Actions</th></tr></thead><tbody>${
+    CFG.plugs.map(c => { const ps = S.plugs[c.id], z = zoneById(c.zoneId); if(!z) return "";
+      return `<tr><td><b>${c.essential?"🔒 ":""}${esc(c.name)}</b><div class="sub">${esc(z.name)} · ${esc(PLUG_TYPES[c.type]||c.type)} · ${esc(plugDevice(c))}</div></td>
+        <td>${plugChip(c,ps)}</td><td>${f2(ps.kW)} kW</td><td>${ps.kWh.toFixed(2)} kWh</td><td class="pos">${(ps.baseKWh-ps.kWh).toFixed(2)} kWh</td>
+        <td>${esc(ps.by)}<div class="sub">${esc(ps.why)}</div></td><td>${plugButtons(c,ps)}</td></tr>`; }).join("")}</tbody>`);
+}
+
+/* ---------- How it works tab ---------- */
+function fnode(icon, title, val){ return `<div class="fnode"><span>${icon}</span><div><b>${title}</b><span class="v">${val}</span></div></div>`; }
+function renderHow(){
+  const T = totals(), shadow = CFG.controlMode==="shadow", R = CFG.rules, today = simDate();
+  $("#mLive").classList.toggle("on", !shadow); $("#mShadow").classList.toggle("on", shadow);
+  const recent = S.cmds.filter(c => c.date===today && S.t - c.t < 60 && S.t >= c.t);
+  const busy = S.cmds.some(c => c.date===today && S.t - c.t <= 2 && S.t >= c.t);
+  const acked = recent.filter(c => c.ms!=null);
+  const avgMs = acked.length ? Math.round(acked.reduce((a,c)=>a+c.ms,0)/acked.length) : 0;
+  const protoCount = {};
+  CFG.zones.forEach(z => { protoCount[z.protocol] = (protoCount[z.protocol]||0) + 1; });
+  CFG.plugs.forEach(c => { const p = c.protocol||"MQTT"; protoCount[p] = (protoCount[p]||0) + 1; });
+  const meetingsNow = CFG.zones.filter(z => S.zones[z.id].meetings.some(m => S.t>=m.start && S.t<m.end)).length;
+  const acOn = CFG.zones.filter(z => S.zones[z.id].acOn).length;
+  const plugsOn = CFG.plugs.filter(c => S.plugs[c.id].state==="on").length;
+  const rated = CFG.zones.reduce((a,z)=>a+z.ratedKW,0);
+  setHTML($("#flow"), `<div class="flow ${busy?"busy":""}">
+    <div class="fcol"><div class="fh"><span class="fn">1</span>Sense</div>
+      ${fnode("👥","Thermal people counters",`${CFG.zones.length} rooms · ${T.occ} people now`)}
+      ${fnode("🌡️","Room temperature (from thermostats)",`avg ${f1(T.temps.reduce((a,b)=>a+b,0)/T.temps.length)} °C`)}
+      ${fnode("☀️","Weather feed",`${f1(S.outside)} °C outside`)}
+      ${fnode("📅","Work calendar & room bookings",`${esc(dayInfo().label)} · ${meetingsNow} meeting(s) now`)}
+      ${fnode("⚡","Power meters & smart plugs",`${f1(T.ac+T.plug)} kW now`)}
+    </div>
+    <div class="farrow" aria-hidden="true"><i></i></div>
+    <div class="fcol ai"><div class="fh"><span class="fn">2</span>Decide</div>
+      <div class="fnode"><span>🧠</span><div><b>ThermaSense AI</b><span class="v">Runs every 60 s for each room and circuit, applying these checks in order:</span></div></div>
+      <ol class="steps">
+        <li><b>Timing:</b> lunch, ${esc(CFG.schedule.officeEnd)} nudge, weekends, holidays</li>
+        <li><b>Occupancy:</b> empty or busy (max ${CFG.maxOccupancy})</li>
+        <li><b>Heat sensor:</b> heat build-up, and predicting when a room is about to empty</li>
+        <li><b>Outside temp:</b> no warming on hot days</li>
+        <li><b>Safety limits:</b> ${CFG.minSetpoint}–${CFG.maxSetpoint} °C</li>
+        <li><b>Leak detector:</b> checks whether energy is being wasted</li>
+      </ol>
+      <span class="muted" style="font-size:12px">Last cycle ${fmtClock(S.t-1)} · ${CFG.zones.length} rooms · ${CFG.plugs.length} circuits</span>
+    </div>
+    <div class="farrow" aria-hidden="true"><i></i></div>
+    <div class="fcol"><div class="fh"><span class="fn">3</span>Send</div>
+      ${fnode("🔗","Integration gateway","On the building network, connected to the BMS")}
+      <div class="pchips">${Object.keys(protoCount).map(p => `<span class="tag">${esc(p)} ×${protoCount[p]}</span>`).join("")}</div>
+      ${fnode("📨","Commands in the last hour", shadow ? `${recent.length} recommended, none sent (shadow mode)` : `${recent.length} sent · ${recent.length ? Math.round(recent.filter(c=>c.status.includes("✓")).length/recent.length*100) : 100}% acknowledged · avg ${avgMs} ms`)}
+      ${fnode("🛡️","Safety","Writes at BACnet priority 12; fire and life-safety systems always take priority")}
+    </div>
+    <div class="farrow" aria-hidden="true"><i></i></div>
+    <div class="fcol"><div class="fh"><span class="fn">4</span>Act</div>
+      ${fnode("❄️","AC thermostats (fan-coil, VAV and split units)",`${acOn}/${CFG.zones.length} cooling · all online`)}
+      ${fnode("🔌","Smart plugs & PDU relays",`${plugsOn} on · ${CFG.plugs.length-plugsOn} switched off`)}
+      ${fnode("🏭","Central plant (AHU / chiller)",`Follows room demand: ~${Math.round(T.ac/Math.max(1,rated)*100)}% load`)}
+    </div>
+  </div>
+  <div class="floop">↺ <b>5 · Verify:</b> within a minute the power meters and room sensors report back. If the expected saving doesn't appear, or energy is being wasted, the leak detector opens a case and the AI works through its fix (see <button class="btn sm" data-tab="leaks">Energy leaks</button>).</div>`);
+
+  // trace
+  const tz = zoneById(S.traceZone) || zoneById(S.selected) || CFG.zones[0];
+  S.traceZone = tz.id;
+  const sel = $("#traceZone");
+  setHTML(sel, CFG.zones.map(z => `<option value="${z.id}">${esc(z.name)} · ${esc(z.thermostatId)}</option>`).join(""));
+  if(document.activeElement!==sel) sel.value = tz.id;
+  const zs = S.zones[tz.id], dec = zs.rec || zs;
+  const lastCmds = S.cmds.filter(c => c.device===(tz.thermostatId||tz.id)).slice(0,2);
+  const next = tz.type==="meeting" ? zs.meetings.find(m => m.start > S.t) : null;
+  const reasons = (zs.rec ? zs.rec.reasons : zs.reasons.filter(r => r[0]!=="👁"));
+  setHTML($("#trace"), `
+    <div class="tstep"><span class="th">① Sensors read</span>
+      <span>👥 ${zs.occ}/${tz.capacity} people (thermal counter)</span>
+      <span>🌡️ Room ${f1(zs.temp)} °C (thermostat sensor)</span>
+      <span>☀️ Outside ${f1(S.outside)} °C (weather feed)</span>
+      <span>🕒 ${fmtClock(S.t)} · ${esc(periodLabel(periodOf(S.t)))}</span>
+      ${tz.type==="meeting" ? `<span>📅 ${next ? "Next booking "+fmtClock(next.start) : "No more bookings today"}</span>` : ""}
+    </div>
+    <div class="tstep"><span class="th">② AI decides</span>
+      ${reasons.slice(0,4).map(r => `<span>${r[0]} ${esc(r[1])}</span>`).join("")}
+      <span class="big">→ ${dec.acOn ? f1(dec.setpoint)+" °C" : "AC off"}</span>
+    </div>
+    <div class="tstep"><span class="th">③ Command via gateway</span>
+      ${lastCmds.length ? lastCmds.map(c => `<code>${fmtClock(c.t)}  ${esc(c.protocol)}\n${esc(c.op)}\n${esc(c.point)}\n= ${esc(c.value)}</code><span class="${c.ms!=null?"ok":"muted"}">${esc(c.status)}${c.ms!=null ? " · "+c.ms+" ms" : ""}</span>`).join("") : `<span class="muted">No command needed yet: the setting hasn't changed.</span>`}
+    </div>
+    <div class="tstep"><span class="th">④ Thermostat ${esc(tz.thermostatId)}</span>
+      <span class="big">${zs.acOn ? "Cooling to "+f1(zs.setpoint)+" °C" : "Off"}</span>
+      <span>${!zs.auto ? "✋ Manual override active" : CFG.controlMode==="shadow" ? "👁 Following its old schedule (shadow mode)" : "🤖 Following ThermaSense"}</span>
+      <span class="muted">Wall controls still work; any change there is detected as a manual override.</span>
+    </div>
+    <div class="tstep"><span class="th">⑤ Result (power meter)</span>
+      <span class="big">${f2(zs.kW)} kW</span>
+      <span>The old schedule would draw ${f2(zs.baseKW)} kW</span>
+      <span class="${zs.baseKW-zs.kW>=0?"pos":"neg"}">${zs.baseKW-zs.kW>=0?"−":"+"}${f2(Math.abs(zs.baseKW-zs.kW))} kW right now</span>
+      ${zs.alerts.length ? `<span style="color:var(--bad)">⚠ ${esc(zs.alerts.map(a=>a.label).join(", "))}: leak case open</span>` : `<span class="ok">✓ No waste detected</span>`}
+    </div>`);
+
+  setHTML($("#cmdTable"), `<thead><tr><th>Time</th><th>Device</th><th>Protocol · command</th><th>Value</th><th>Status</th></tr></thead><tbody>${
+    S.cmds.slice(0,60).map(c => `<tr><td class="mono">${fmtClock(c.t)}</td><td><b>${esc(c.device)}</b><div class="sub">${esc(c.zone)}</div></td>
+      <td>${esc(c.protocol)} · ${esc(c.op)}<div class="sub mono">${esc(c.point)}</div></td><td><b>${esc(c.value)}</b></td>
+      <td><span class="tag ${c.ms==null?"shadow":c.status.includes("retried")?"bad":"good"}">${esc(c.status)}</span>${c.ms!=null?`<div class="sub">${c.ms} ms</div>`:""}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No commands yet</td></tr>`}</tbody>`);
+
+  setHTML($("#integ"), `<ul class="ilist">
+      <li><b>Reads</b> each thermostat every 60 s: room temperature, setpoint, unit on/off and fan status (BACnet ReadProperty, Modbus input registers, MQTT subscribe or KNX group read).</li>
+      <li><b>Writes</b> three values only: <i>cooling setpoint</i>, <i>unit on/off</i> and <i>max output %</i> (used to fix leaks). Nothing else on the unit is changed.</li>
+      <li><b>Stays within limits:</b> never outside ${CFG.minSetpoint}–${CFG.maxSetpoint} °C, and at most one change per room per minute.</li>
+      <li><b>Wall thermostats still work.</b> A change at the wall is detected as a manual override (✋). The AI respects it, unless it wastes energy, in which case it prompts the occupant and releases it after ${R.autoRevertOverrideMins||"—"} min. Overrides reset at midnight.</li>
+      <li><b>Fail-safe:</b> the gateway sends a heartbeat every minute. If ThermaSense goes offline for 5 min, each thermostat returns to its own built-in schedule (${R.baselineSetpoint} °C, ${esc(CFG.schedule.officeStart)}–${esc(CFG.schedule.officeEnd)}). Comfort never depends on the AI being online.</li>
+      <li><b>Priority:</b> the AI writes at BACnet priority 12, below an operator's manual command (8) and fire or life-safety systems (1–2), so those always win.</li>
+      <li><b>Shadow mode</b> lets you try the AI without it touching anything: it logs what it <i>would</i> send, while the building keeps its old schedule.</li>
+    </ul>`);
+
+  $("#devSummary").textContent = `${CFG.zones.length} thermostats · ${CFG.plugs.length} socket circuits · all online`;
+  setHTML($("#devTable"), `<thead><tr><th>Device</th><th>Kind</th><th>Room</th><th>Protocol · address</th><th>Status</th><th>Reading</th><th>Last command</th></tr></thead><tbody>${
+    CFG.zones.map(z => { const zs = S.zones[z.id], l = zs.lastCmd;
+      return `<tr class="click" data-trace="${z.id}"><td><b>${esc(z.thermostatId)}</b></td><td>❄️ AC thermostat</td><td>${esc(z.name)}</td><td>${esc(z.protocol)} · <span class="mono">${esc(z.address)}</span></td>
+        <td><span class="ok">● Online</span></td><td>${f1(zs.temp)} °C · ${zs.acOn ? "set "+f1(zs.setpoint)+" °C" : "off"}</td><td>${l ? fmtClock(l.t)+" · "+esc(l.value) : "—"}</td></tr>`; }).join("") +
+    CFG.plugs.map(c => { const z = zoneById(c.zoneId), ps = S.plugs[c.id]; if(!z) return "";
+      return `<tr><td><b>${esc(plugDevice(c))}</b></td><td>${c.essential?"🔒":"🔌"} Smart plug</td><td>${esc(z.name)}<div class="sub">${esc(c.name)}</div></td><td>${esc(c.protocol||"MQTT")}</td>
+        <td><span class="ok">● Online</span></td><td>${ps.state==="on" ? "On · "+f2(ps.kW)+" kW" : "Relay open (off)"}</td><td>${esc(ps.by)}</td></tr>`; }).join("")}</tbody>`);
+}
+
+function drawChart(cv, series, o){
+  if(!cv || !cv.getContext) return;
+  let c; try{ c = cv.getContext("2d"); }catch(e){ return; }
+  if(!c) return;
+  const dpr = window.devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight; if(!w || !h) return;
+  if(cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  const L=40, Rr=10, T=8, B=22, pw=w-L-Rr, ph=h-T-B, H = S.history;
+  let lo=Infinity, hi=-Infinity;
+  series.forEach(s => H.forEach(p => { const v=p[s.key]; lo=Math.min(lo,v); hi=Math.max(hi,v); }));
+  if(o.hline!=null){ lo=Math.min(lo,o.hline); hi=Math.max(hi,o.hline); }
+  if(!isFinite(lo)){ lo=0; hi=1; }
+  if(o.zero) lo=0;
+  const pad = (hi-lo)*0.12 || 1; hi += pad; if(!o.zero) lo -= pad;
+  const X = t => L + pw*t/1440, Y = v => T + ph*(1-(v-lo)/(hi-lo)), s = sched();
+  if(dayInfo().type==="workday"){
+    c.fillStyle="rgba(245,158,11,.10)"; c.fillRect(X(s.ls),T,X(s.le)-X(s.ls),ph);
+    c.fillStyle="rgba(100,116,139,.07)"; c.fillRect(X(s.end),T,X(1440)-X(s.end),ph); c.fillRect(X(0),T,X(s.start)-X(0),ph);
+  } else { c.fillStyle="rgba(100,116,139,.07)"; c.fillRect(X(0),T,pw,ph); }
+  c.font="11px -apple-system,Segoe UI,Roboto,sans-serif"; c.fillStyle="#8a94a3"; c.strokeStyle="#eef1f4"; c.lineWidth=1;
+  c.textAlign="right"; c.textBaseline="middle";
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4, y=Y(v); c.beginPath(); c.moveTo(L,y); c.lineTo(w-Rr,y); c.stroke(); c.fillText(v.toFixed(0)+o.unit, L-6, y); }
+  c.textAlign="center"; c.textBaseline="top";
+  for(let hr=0; hr<24; hr+=3) c.fillText(String(hr).padStart(2,"0")+":00", Math.max(L+14, X(hr*60)), h-B+6);
+  if(o.hline!=null){ c.strokeStyle="rgba(220,38,38,.5)"; c.setLineDash([4,4]); c.beginPath(); c.moveTo(L,Y(o.hline)); c.lineTo(w-Rr,Y(o.hline)); c.stroke(); c.setLineDash([]); }
+  series.forEach(sr => {
+    if(!H.length) return;
+    const path = () => { c.beginPath(); H.forEach((p,i) => { const x=X(p.t), y=Y(p[sr.key]); i ? c.lineTo(x,y) : c.moveTo(x,y); }); };
+    if(sr.fill){ path(); c.lineTo(X(H[H.length-1].t),Y(lo)); c.lineTo(X(H[0].t),Y(lo)); c.closePath(); c.fillStyle=sr.fill; c.fill(); }
+    path(); c.strokeStyle=sr.color; c.lineWidth=sr.width||2; c.setLineDash(sr.dash||[]); c.stroke(); c.setLineDash([]);
+  });
+  c.strokeStyle="#16202b"; c.globalAlpha=.5; c.setLineDash([3,3]); c.beginPath(); c.moveTo(X(S.t),T); c.lineTo(X(S.t),T+ph); c.stroke(); c.setLineDash([]); c.globalAlpha=1;
+}
+function renderCharts(){
+  drawChart($("#chartTemp"), [{key:"out",color:"#f97316"},{key:"inAvg",color:"#0e7c72"}], {unit:"°", hline:CFG.rules.hotDayThreshold});
+  drawChart($("#chartPower"), [{key:"baseKW",color:"#98a2b3",dash:[5,4],width:1.6},{key:"kW",color:"#0e7c72",fill:"rgba(14,124,114,.12)"}], {unit:"", zero:true});
+}
+
+function renderExportInfo(){
+  $("#exportInfo").textContent = `${S.log.length.toLocaleString()} room readings · ${S.plugLog.length.toLocaleString()} plug readings · ${S.cases.length} leak cases · ${S.cmds.length.toLocaleString()} commands · ${S.days.length/Math.max(1,CFG.zones.length)|0} full day(s) summarised`;
+}
+
+function buildJump(){
+  const sc = CFG.schedule, s = sched();
+  $("#jump").innerHTML = `<option value="">⏩ Skip to…</option>` + [
+    [s.start-30, `Morning arrivals (${fmtClock(s.start-30)})`],
+    [s.ls-12, `Just before lunch (${fmtClock(s.ls-12)})`],
+    [s.ls+15, `Lunch break (${fmtClock(s.ls+15)})`],
+    [s.end-12, `Just before ${sc.officeEnd}`],
+    [s.end+5, `After hours (${fmtClock(s.end+5)})`],
+    [s.end+60, `Evening, sockets switched off (${fmtClock(s.end+60)})`],
+    [s.end+150, `Night (${fmtClock(s.end+150)})`]
+  ].map(([t,l]) => `<option value="${t}">${l}</option>`).join("");
+}
+
+/* =====================================================================
+   4b. FLOOR PLAN UPLOAD & EDITOR
+   PDFs are read with Mozilla's pdf.js, downloaded the first time a PDF is
+   uploaded (needs internet once). PNG/JPG plans work fully offline.
+   ===================================================================== */
+const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const FPE = { floor:null, zones:[], plans:{}, labels:{}, drawing:null, active:null, pdf:null, pdfFloor:null, pdfName:"", pdfPage:1, drag:null, dirty:false };
+let pdfjsPromise = null;
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(!pdfjsPromise) pdfjsPromise = new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = PDFJS_URL;
+    sc.onload = () => { if(window.pdfjsLib){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; res(window.pdfjsLib); } else { pdfjsPromise = null; rej(new Error("the PDF reader did not load")); } };
+    sc.onerror = () => { pdfjsPromise = null; rej(new Error("the PDF reader could not be downloaded (reading PDFs needs an internet connection the first time)")); };
+    document.head.appendChild(sc);
+  });
+  return pdfjsPromise;
+}
+const normName = s => String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+function guessType(name){ return /meet|board|conf|training|discuss|huddle|seminar/i.test(name) ? "meeting" : /pantry|kitchen|cafe|café|break|canteen/i.test(name) ? "pantry" : /lobby|reception|entrance|foyer/i.test(name) ? "lobby" : "office"; }
+function floorsOf(zones, plans){ return [...new Set([...zones.map(z => z.floor||"Main"), ...Object.keys(plans||{})])]; }
+function fpePlan(){ return planFor(FPE.floor, FPE.plans, FPE.zones); }
+function setFpeMsg(t, err){ const m = $("#fpeMsg"); m.textContent = t||""; m.classList.toggle("err", !!err); }
+function matchZone(label){
+  const n = normName(label), zs = FPE.zones.filter(z => (z.floor||"Main")===FPE.floor);
+  return zs.find(z => normName(z.name)===n) || (n.length>=4 ? zs.find(z => { const zn = normName(z.name); return zn.includes(n) || n.includes(zn); }) : null) || null;
+}
+// Snap to walls: flood-fill the plan's white space from the label to find the room's outline.
+function preparePixels(plan){
+  if(!plan || (FPE.pix && FPE.pix.src===plan.src) || FPE.pixLoading===plan.src) return;
+  FPE.pixLoading = plan.src;
+  loadImg(plan.src).then(im => {
+    const W = 480, H = Math.max(1, Math.round(W * (im.naturalHeight||plan.h) / (im.naturalWidth||plan.w)));
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H); ctx.drawImage(im, 0, 0, W, H);
+    const d = ctx.getImageData(0,0,W,H).data, light = new Uint8Array(W*H);
+    for(let i=0;i<W*H;i++) light[i] = (d[i*4]*0.3 + d[i*4+1]*0.59 + d[i*4+2]*0.11) > 170 ? 1 : 0;
+    FPE.pix = { src:plan.src, w:W, h:H, light };
+  }).catch(() => {}).finally(() => { if(FPE.pixLoading===plan.src) FPE.pixLoading = null; });
+}
+function snapBox(l){
+  const P = FPE.pix, plan = fpePlan(); if(!P || !plan || P.src!==plan.src) return null;
+  const W = P.w, H = P.h, L = P.light, cx = Math.round(l.x/100*W), cy = Math.round(l.y/100*H);
+  let start = -1;
+  for(let k=0; k<=18 && start<0; k++) for(const [dx,dy] of [[0,-k],[0,k],[-k,0],[k,0],[-k,-k],[k,k]]){ const x = cx+dx, y = cy+dy; if(x>=0 && y>=0 && x<W && y<H && L[y*W+x]){ start = y*W+x; break; } }
+  if(start<0) return null;
+  const seen = new Uint8Array(W*H), stack = [start]; seen[start] = 1;
+  let n = 0, x0 = W, x1 = 0, y0 = H, y1 = 0; const cap = W*H*0.35;
+  while(stack.length){
+    const i = stack.pop(), x = i % W, y = (i - x) / W; n++;
+    if(n > cap) return null;
+    if(x<x0) x0 = x; if(x>x1) x1 = x; if(y<y0) y0 = y; if(y>y1) y1 = y;
+    if(x>0 && L[i-1] && !seen[i-1]){ seen[i-1] = 1; stack.push(i-1); }
+    if(x<W-1 && L[i+1] && !seen[i+1]){ seen[i+1] = 1; stack.push(i+1); }
+    if(y>0 && L[i-W] && !seen[i-W]){ seen[i-W] = 1; stack.push(i-W); }
+    if(y<H-1 && L[i+W] && !seen[i+W]){ seen[i+W] = 1; stack.push(i+W); }
+  }
+  if(n < W*H*0.002 || x0<=1 || y0<=1 || x1>=W-2 || y1>=H-2) return null;
+  const r = { x:x0/W*100, y:y0/H*100, w:(x1-x0+1)/W*100, h:(y1-y0+1)/H*100 };
+  if(r.w < 2 || r.h < 2) return null;
+  return { x:+(r.x+0.4).toFixed(1), y:+(r.y+0.4).toFixed(1), w:+Math.max(1.5, r.w-0.8).toFixed(1), h:+Math.max(1.5, r.h-0.8).toFixed(1) };
+}
+function boxAround(l){
+  const snapped = snapBox(l); if(snapped) return snapped;
+  const plan = fpePlan(), w = 12, h = clamp(w * (plan ? plan.w/plan.h : 1.6), 6, 22);
+  return { x:+clamp(l.x - w/2, 0, 100-w).toFixed(1), y:+clamp(l.y - h/2, 0, 100-h).toFixed(1), w, h:+h.toFixed(1) };
+}
+function openFPE(upload){
+  FPE.zones = clone(CFG.zones); FPE.plans = Object.assign({}, CFG.floorplans||{}); FPE.labels = {};
+  FPE.floor = S.floor || floorsOf(FPE.zones, FPE.plans)[0] || "Main";
+  FPE.drawing = null; FPE.active = null; FPE.pdf = null; FPE.dirty = false; setFpeMsg("");
+  $("#fpeStage")._img = false;
+  $("#fpEditor").hidden = false; renderFPE();
+  if(upload) $("#fpFile").click();
+}
+function closeFPE(force){
+  if(!force && FPE.dirty && !confirm("Close without saving your floor plan changes?")) return;
+  $("#fpEditor").hidden = true;
+}
+function newZoneFor(name, type, cap){
+  const n = FPE.zones.length + 1, id = "z" + Date.now().toString(36) + n;
+  cap = Math.max(1, cap || (type==="meeting" ? 8 : type==="pantry" ? 10 : type==="lobby" ? 6 : 12));
+  return { id, name, floor:FPE.floor, type, capacity:cap, ratedKW:+Math.max(1, cap*0.35).toFixed(1), thermostatId:"TSTAT-" + slugify(name).toUpperCase().slice(0,12), protocol:"BACnet/IP", address:String(9000+n) };
+}
+function renderFPE(){
+  const floors = floorsOf(FPE.zones, FPE.plans); if(!floors.includes(FPE.floor)) floors.push(FPE.floor);
+  $("#fpeFloor").innerHTML = floors.map(f => `<option value="${esc(f)}" ${f===FPE.floor?"selected":""}>${esc(f)}</option>`).join("") + `<option value="__new">＋ Add a new floor…</option>`;
+  const showPages = FPE.pdf && FPE.pdf.numPages > 1 && FPE.pdfFloor===FPE.floor;
+  $("#fpePageBox").hidden = !showPages;
+  if(showPages) $("#fpePage").innerHTML = Array.from({length:FPE.pdf.numPages}, (_,i) => `<option value="${i+1}" ${i+1===FPE.pdfPage?"selected":""}>${i+1} of ${FPE.pdf.numPages}</option>`).join("");
+  const plan = fpePlan(), stage = $("#fpeStage");
+  const zones = FPE.zones.filter(z => (z.floor||"Main")===FPE.floor);
+  const labels = FPE.labels[FPE.floor] || [];
+  if(!plan){
+    stage._img = false;
+    stage.innerHTML = `<div class="fp-empty" style="border:0"><div style="font-size:28px">📄</div><div><b style="color:var(--ink)">No floor plan for ${esc(FPE.floor)} yet</b><br>Upload the architect's floor plan as a PDF (or a PNG/JPG image).</div>
+      <div class="ctrl" style="justify-content:center"><button class="btn primary" data-fpe="upload">📄 Upload PDF or image</button><button class="btn" data-fpe="blank">Start from a blank layout</button></div></div>`;
+  } else {
+    if(!stage._img){ stage.innerHTML = `<img id="fpeImg" alt="Floor plan"><div id="fpeLayer"></div><div class="fpe-temp" id="fpeTemp" hidden></div>`; stage._img = true; }
+    const img = $("#fpeImg"); if(img._src !== plan.src){ img.src = plan.src; img._src = plan.src; }
+    preparePixels(plan);
+    $("#fpeLayer").innerHTML = zones.filter(z => z.plan).map(z => `<div class="fpe-box ${FPE.active===z.id?"active":""}" data-box="${z.id}" style="left:${z.plan.x}%;top:${z.plan.y}%;width:${z.plan.w}%;height:${z.plan.h}%">${esc(z.name)}</div>`).join("")
+      + labels.map(l => `<span class="fpe-lbl" style="left:${l.x}%;top:${l.y}%">${esc(l.s)}</span>`).join("");
+  }
+  stage.classList.toggle("drawing", !!FPE.drawing);
+  const placed = zones.filter(z => z.plan).length;
+  const drawZ = FPE.zones.find(z => z.id===FPE.drawing);
+  const matched = labels.map((l,i) => ({l, i, z:matchZone(l.s)}));
+  $("#fpeSide").innerHTML = `
+    <h3 style="margin-top:0">Map this floor in 3 steps</h3>
+    <ol class="steps">
+      <li><b>Upload</b> the floor plan as a PDF (or PNG/JPG). Room names printed on the PDF are found automatically, and <b>Place</b> fits each room to its walls.</li>
+      <li>For each room, click <b>Draw</b> and drag a box over it on the plan. Drag any box to move it.</li>
+      <li>Click <b>Save &amp; apply</b>. The live heatmap then shows your layout.</li>
+    </ol>
+    ${drawZ ? `<div class="note pred">✏️ Now drag on the plan to draw <b>${esc(drawZ.name)}</b>. <button class="btn sm" data-fpe="canceldraw">Cancel</button></div>` : ""}
+    <h3>Rooms on ${esc(FPE.floor)} · ${placed}/${zones.length} placed</h3>
+    ${zones.length ? `<ul class="list">${zones.map(z => `<li class="${FPE.active===z.id||FPE.drawing===z.id?"active":""}"><span><span class="dot" style="background:${z.plan?"var(--accent)":"#d0d5dd"}"></span>${esc(z.name)}</span><span class="r">
+        <button class="btn sm" data-fpe="draw" data-id="${z.id}" ${plan?"":"disabled"}>${z.plan?"Redraw":"Draw"}</button>${z.plan?`<button class="btn sm" data-fpe="unplace" data-id="${z.id}" title="Remove from plan">✕</button>`:""}</span></li>`).join("")}</ul>` : `<p class="hint">No rooms on this floor yet. Add them below or from the PDF's labels.</p>`}
+    ${labels.length ? `<h3>Room names found in the PDF · ${labels.length}</h3>
+      <div class="ctrl"><button class="btn sm" data-fpe="placeall">Place all matched rooms</button><button class="btn sm" data-fpe="addall">＋ Add unmatched as new rooms</button></div>
+      <ul class="list">${matched.map(({l,i,z}) => `<li><span>“${esc(l.s)}”</span><span class="r">${z ? `<button class="btn sm" data-fpe="placelabel" data-i="${i}">Place ${esc(z.name)}</button>` : `<button class="btn sm" data-fpe="addlabel" data-i="${i}">＋ Add as room</button>`}</span></li>`).join("")}</ul>
+      <p class="hint">Purple tags on the plan show where each name was found. Ignore any that aren't rooms.</p>` : ""}
+    <h3>Add a room on this floor</h3>
+    <div class="newroom">
+      <input id="nrName" placeholder="Room name" aria-label="Room name">
+      <select id="nrType" aria-label="Room type">${Object.keys(TYPE_LABEL).map(t => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join("")}</select>
+      <input id="nrCap" type="number" min="1" placeholder="Capacity" aria-label="Capacity">
+      <button class="btn sm" data-fpe="newroom" ${plan?"":"disabled"}>＋ Add &amp; draw</button>
+    </div>
+    <p class="hint">New rooms get a default thermostat ID. Edit their details later in ⚙ Building setup.</p>`;
+}
+function readAsDataURL(file){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error("the file could not be read")); r.readAsDataURL(file); }); }
+function loadImg(src){ return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("that image could not be opened")); im.src = src; }); }
+function toJpeg(src, w, h){
+  const k = Math.min(1, 2000/Math.max(w, h)), cv = document.createElement("canvas");
+  cv.width = Math.round(w*k); cv.height = Math.round(h*k);
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(src, 0, 0, cv.width, cv.height);
+  return { img: cv.toDataURL("image/jpeg", 0.85), w: cv.width, h: cv.height };
+}
+function extractLabels(items, vp){
+  const raw = [];
+  items.forEach(it => {
+    const s = (it.str||"").trim(); if(!s) return;
+    const t = it.transform, fh = Math.hypot(t[2], t[3]) || it.height || 10;
+    const [x, y] = vp.convertToViewportPoint(t[4], t[5]);
+    raw.push({ s, x0:x, x1:x + (it.width||0)*vp.scale, y, h:fh*vp.scale });
+  });
+  raw.sort((a,b) => Math.abs(a.y-b.y) < Math.max(a.h,b.h)*0.5 ? a.x0-b.x0 : a.y-b.y);
+  const lines = [];
+  raw.forEach(r => {
+    const last = lines[lines.length-1];
+    if(last && Math.abs(last.y - r.y) < Math.max(last.h, r.h)*0.5 && r.x0 - last.x1 < Math.max(last.h, r.h)*1.2) { last.s += " " + r.s; last.x1 = r.x1; }
+    else lines.push(Object.assign({}, r));
+  });
+  const seen = new Set(), out = [];
+  lines.forEach(l => {
+    const s = l.s.replace(/\s+/g," ").trim(), key = normName(s);
+    if(s.length < 3 || s.length > 40 || !/[a-z]{2}/i.test(s) || seen.has(key)) return;
+    if(/^[\d\s.,:×x\-–/()]+(mm|m|cm|m2|m²|sqm|ft)?$/i.test(s) || /^(scale|north|drawing|dwg|rev|date|sheet|level|floor|plan|title)\b/i.test(s) || /\b(m²|m2|sqm)\b/i.test(s)) return;
+    seen.add(key);
+    out.push({ s, x:+clamp((l.x0+l.x1)/2 / vp.width*100, 0, 100).toFixed(1), y:+clamp((l.y - l.h*0.35) / vp.height*100, 0, 100).toFixed(1) });
+  });
+  return out.slice(0, 60);
+}
+async function renderPdfPage(n){
+  const page = await FPE.pdf.getPage(n), vp1 = page.getViewport({scale:1});
+  const vp = page.getViewport({scale: Math.min(4, 2000/Math.max(vp1.width, vp1.height))});
+  const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  const tc = await page.getTextContent();
+  const labels = extractLabels(tc.items, vp);
+  FPE.plans[FPE.floor] = { img: cv.toDataURL("image/jpeg", 0.85), w: cv.width, h: cv.height, source: `${FPE.pdfName}${FPE.pdf.numPages>1 ? " · page "+n : ""}` };
+  FPE.labels[FPE.floor] = labels; FPE.pdfPage = n; FPE.pdfFloor = FPE.floor; FPE.dirty = true;
+  const m = labels.filter(l => matchZone(l.s)).length;
+  setFpeMsg(`Loaded ${FPE.pdfName}${FPE.pdf.numPages>1 ? ` (page ${n} of ${FPE.pdf.numPages})` : ""}. Found ${labels.length} room name${labels.length===1?"":"s"}${labels.length ? `, ${m} matching rooms on ${FPE.floor}` : ""}. ${m ? "Click “Place all matched rooms”, or draw rooms yourself." : "Now draw each room on the plan."}`);
+}
+async function handleFloorFile(file){
+  if(!file) return;
+  setFpeMsg(`Reading ${file.name}…`);
+  try{
+    if(/pdf/i.test(file.type) || /\.pdf$/i.test(file.name)){
+      const lib = await loadPdfJs();
+      FPE.pdf = await lib.getDocument({data: await file.arrayBuffer()}).promise;
+      FPE.pdfName = file.name;
+      await renderPdfPage(1);
+    } else if(/^image\//.test(file.type) || /\.(png|jpe?g|webp|svg)$/i.test(file.name)){
+      const im = await loadImg(await readAsDataURL(file));
+      const out = toJpeg(im, im.naturalWidth || 1600, im.naturalHeight || 1000);
+      FPE.plans[FPE.floor] = Object.assign(out, {source:file.name}); FPE.labels[FPE.floor] = []; FPE.pdf = null; FPE.dirty = true;
+      setFpeMsg(`Loaded ${file.name}. Now click “Draw” next to each room and drag a box over it on the plan.`);
+    } else throw new Error("please choose a PDF, PNG or JPG file");
+  }catch(err){
+    setFpeMsg(`Couldn't read that file: ${err.message}.${/internet/.test(err.message) ? " You can upload a PNG or JPG export of the plan instead, which works offline." : ""}`, true);
+  }
+  renderFPE();
+}
+function stagePt(e){ const r = $("#fpeStage").getBoundingClientRect(); return { x: clamp((e.clientX - r.left)/r.width*100, 0, 100), y: clamp((e.clientY - r.top)/r.height*100, 0, 100) }; }
+function fpeAction(b){
+  const a = b.dataset.fpe, z = b.dataset.id ? FPE.zones.find(q => q.id===b.dataset.id) : null;
+  const labels = FPE.labels[FPE.floor] || [];
+  if(a==="close") return closeFPE();
+  if(a==="save") return saveFPE();
+  if(a==="upload") return $("#fpFile").click();
+  if(a==="blank"){ const bl = samplePlan(FPE.floor, FPE.zones, true); FPE.plans[FPE.floor] = { img:bl.src, w:bl.w, h:bl.h, source:"Blank layout" }; FPE.dirty = true; setFpeMsg("Blank layout ready. Draw each room where it sits."); }
+  if(a==="removeplan"){ if(FPE.plans[FPE.floor] && confirm(`Remove the uploaded floor plan for ${FPE.floor}? Room positions are kept.`)){ delete FPE.plans[FPE.floor]; delete FPE.labels[FPE.floor]; FPE.dirty = true; setFpeMsg("Plan removed."); } }
+  if(a==="draw" && z){ FPE.drawing = z.id; FPE.active = z.id; setFpeMsg(`Drag on the plan to draw ${z.name}.`); }
+  if(a==="canceldraw"){ FPE.drawing = null; setFpeMsg(""); }
+  if(a==="unplace" && z){ delete z.plan; FPE.dirty = true; }
+  if(a==="placelabel"){ const l = labels[+b.dataset.i], mz = l && matchZone(l.s); if(mz){ mz.plan = boxAround(l); FPE.active = mz.id; FPE.dirty = true; setFpeMsg(`Placed ${mz.name}, fitted to the walls where the plan allows. Drag to move it, or click Redraw.`); } }
+  if(a==="placeall"){ let n = 0; labels.forEach(l => { const mz = matchZone(l.s); if(mz){ mz.plan = boxAround(l); n++; } }); FPE.dirty = FPE.dirty || n>0; setFpeMsg(n ? `Placed ${n} room${n>1?"s":""}, fitted to the walls where the plan allows. Check them and use Redraw for any that look wrong.` : "No labels matched existing rooms."); }
+  if(a==="addlabel"){ const l = labels[+b.dataset.i]; if(l){ const nz = newZoneFor(l.s, guessType(l.s)); nz.plan = boxAround(l); FPE.zones.push(nz); FPE.active = nz.id; FPE.dirty = true; setFpeMsg(`Added ${nz.name} as a ${TYPE_LABEL[nz.type].toLowerCase()}. Redraw it to fit the walls.`); } }
+  if(a==="addall"){ let n = 0; labels.forEach(l => { if(!matchZone(l.s)){ const nz = newZoneFor(l.s, guessType(l.s)); nz.plan = boxAround(l); FPE.zones.push(nz); n++; } }); FPE.dirty = FPE.dirty || n>0; setFpeMsg(n ? `Added ${n} new room${n>1?"s":""}. Remove any that aren't rooms in ⚙ Building setup.` : "Every label already matches a room."); }
+  if(a==="newroom"){
+    const name = ($("#nrName").value||"").trim(); if(!name){ setFpeMsg("Type a room name first.", true); $("#nrName").focus(); return; }
+    const nz = newZoneFor(name, $("#nrType").value, parseInt($("#nrCap").value)); FPE.zones.push(nz); FPE.drawing = nz.id; FPE.active = nz.id; FPE.dirty = true;
+    setFpeMsg(`Added ${name}. Now drag on the plan to draw it.`);
+  }
+  renderFPE();
+}
+function saveFPE(){
+  if(!FPE.zones.length){ setFpeMsg("Add at least one room.", true); return; }
+  CFG.zones = FPE.zones; CFG.floorplans = FPE.plans;
+  const ok = saveConfig();
+  syncZones(); CFG.zones.forEach(z => { S.zones[z.id].cmdKey = ""; applyNow(z); });
+  S.floor = FPE.floor; S.layout = "plan";
+  addAction(null, `🗺 Floor plan saved for ${FPE.floor}: ${CFG.zones.filter(z => (z.floor||"Main")===FPE.floor && z.plan).length} rooms placed`, "info");
+  closeFPE(true); refresh();
+  if(!ok) alert("The floor plan is applied, but it's too large to keep in this browser's storage. To keep it, use ⚙ Building setup → Export config, and import that file next time.");
+}
+
+/* =====================================================================
+   5. DATA EXPORT
+   ===================================================================== */
+function toCSV(header, rows){
+  return "﻿" + [header, ...rows].map(r => r.map(v => { v = v==null ? "" : String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(",")).join("\n");
+}
+function download(name, text, type){
+  const blob = new Blob([text], {type}), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+const slug = () => (slugify(CFG.buildingName) || "building");
+function doExport(kind){
+  const base = `${slug()}_${simDate()}`;
+  if(kind==="readings") download(`${base}_room-readings.csv`, toCSV(LOG_HEADER, S.log), "text/csv");
+  if(kind==="plugs") download(`${base}_plug-loads.csv`, toCSV(PLUG_HEADER, S.plugLog), "text/csv");
+  if(kind==="daily"){
+    const today = CFG.zones.map(z => zoneDayRow(simDate(), dayInfo().type, z, S.zones[z.id].d, "in progress"));
+    download(`${base}_daily-energy.csv`, toCSV(DAILY_HEADER, [...S.days, ...today]), "text/csv");
+  }
+  if(kind==="leaks") download(`${base}_leak-cases.csv`, toCSV(["case_id","date","zone","leak_type","opened","closed","minutes_open","status","fixed_by","power_before_kw","power_after_kw","wasted_kwh","steps"],
+    S.cases.slice().reverse().map(c => [c.id, c.date, c.zone, LEAK_INFO[c.key].title, fmtClock(c.openT), c.closedAbs ? fmtClock(c.closedAbs%1440) : "",
+      (c.closedAbs || absNow()) - c.openAbs, c.status, c.resolvedBy || "", f2(c.kWBefore), c.kWAfter!=null ? f2(c.kWAfter) : "", c.wasted.toFixed(3),
+      c.steps.map(s => `${fmtClock(s.t)} ${s.who?"["+s.who+"] ":""}${s.text}`).join(" | ")])), "text/csv");
+  if(kind==="commands") download(`${base}_gateway-commands.csv`, toCSV(["date","time","device","zone","protocol","operation","point","value","status","latency_ms"],
+    S.cmds.slice().reverse().map(c => [c.date, fmtClock(c.t), c.device, c.zone, c.protocol, c.op, c.point, c.value, c.status, c.ms==null ? "" : c.ms])), "text/csv");
+  if(kind==="actions") download(`${base}_ai-actions.csv`, toCSV(["date","time","zone","type","action"], S.actions.slice().reverse().map(a => [a.date, fmtClock(a.t), a.zone, a.kind, a.text])), "text/csv");
+  if(kind==="config") download(`${slug()}_thermasense-config.json`, JSON.stringify(CFG, null, 2), "application/json");
+}
+
+/* =====================================================================
+   6. BUILDING SETUP PANEL
+   ===================================================================== */
+const FIELDS = [
+  ["General", [["buildingName","Building name","text"],["maxOccupancy","Max occupancy (people)","number",1],["currency","Currency symbol","text"],["tariffPerKWh","Electricity price per kWh","number",0.01],
+    ["controlMode","Control mode","select",null,"Shadow = AI recommends only, nothing is sent",[["live","Live control"],["shadow","Shadow mode (recommend only)"]]]]],
+  ["Comfort", [["comfortSetpoint","Comfort temperature (°C)","number",0.5],["minSetpoint","Lowest AI setpoint (°C)","number",0.5],["maxSetpoint","Highest AI setpoint (°C)","number",0.5],["rules.baselineSetpoint","Old fixed setting to compare savings (°C)","number",0.5,"What the building used before ThermaSense"]]],
+  ["Working hours", [["schedule.officeStart","Office opens","time"],["schedule.lunchStart","Lunch starts","time"],["schedule.lunchEnd","Lunch ends","time"],["schedule.officeEnd","Office closes","time"],["rules.precoolMins","Pre-cool before opening (min)","number",5]]],
+  ["AC rules", [["rules.lunchRaise","Lunch-time increase (°C)","number",0.5],["rules.afterHoursRaise","After-hours increase (°C)","number",0.5,"Nudges staff to go home on time"],["rules.emptyRaise","Empty-zone increase (°C)","number",0.5],["rules.emptyOffMins","Switch off empty zone after (min)","number",5],["rules.shutdownAfterMins","After hours: switch off when empty for (min)","number",5],["rules.emptyingSoonMins","Predict emptying this far ahead (min)","number",1],["rules.emptyingRaise","Early dial-down when emptying (°C)","number",0.5],["rules.hotDayThreshold","Hot day when outside reaches (°C)","number",0.5],["rules.hotDayMaxRaise","Max increase on hot days (°C)","number",0.5,"0 = never warm up occupied zones on hot days"],["rules.highOccupancyRatio","Zone counts as busy at (0–1 full)","number",0.05],["rules.highOccupancyDrop","Extra cooling for busy zones (°C)","number",0.5],["rules.heatBuildUp","Boost cooling when this far above target (°C)","number",0.5]]],
+  ["Energy leak response", [["rules.aiLeakResponse","AI fixes leaks automatically","checkbox"],["rules.autoRevertOverrideMins","Release wasteful manual overrides after (min)","number",5,"0 = never, only notify"]]],
+  ["Plug loads", [["rules.aiPlugControl","AI switches sockets off/on","checkbox"],["rules.plugCutEmptyMins","After hours: cut sockets when empty for (min)","number",5],["rules.plugRestoreLeadMins","Restore sockets before opening (min)","number",5],["rules.avCutEmptyMins","Cut meeting-room AV when empty for (min)","number",5]]]
+];
+const getPath = (o,p) => p.split(".").reduce((a,k) => a==null ? a : a[k], o);
+function setPath(o,p,v){ const k = p.split("."), last = k.pop(); k.reduce((a,x) => a[x] = a[x]||{}, o)[last] = v; }
+
+function fieldHTML([p,label,type,step,hint,opts]){
+  const v = getPath(CFG,p);
+  if(type==="checkbox") return `<div class="field check"><label><input data-path="${p}" type="checkbox" ${v?"checked":""}> ${label}</label>${hint?`<small>${hint}</small>`:""}</div>`;
+  if(type==="select") return `<div class="field"><label for="f_${p}">${label}</label><select id="f_${p}" data-path="${p}">${opts.map(([val,l]) => `<option value="${val}" ${val===v?"selected":""}>${l}</option>`).join("")}</select>${hint?`<small>${hint}</small>`:""}</div>`;
+  return `<div class="field"><label for="f_${p}">${label}</label><input id="f_${p}" data-path="${p}" type="${type}" ${step?`step="${step}"`:""} value="${esc(v ?? "")}">${hint?`<small>${hint}</small>`:""}</div>`;
+}
+function renderSetup(){
+  let html = FIELDS.map(([title, list]) => `<h3>${title}</h3><div class="fgrid">${list.map(fieldHTML).join("")}</div>`).join("");
+  html += `<h3>Calendar</h3><div class="fgrid">
+    <div class="field"><label>Working days</label><div class="wd" id="wdBoxes">${DAYS.map((d,i) => `<label><input type="checkbox" value="${i}" ${(CFG.workDays||[]).includes(i)?"checked":""}> ${d}</label>`).join("")}</div></div>
+    <div class="field" style="grid-column:span 2"><label for="holidays">Public holidays &amp; closures (one per line: YYYY-MM-DD Name)</label><textarea id="holidays">${esc((CFG.holidays||[]).map(h => `${h.date} ${h.name||""}`.trim()).join("\n"))}</textarea></div></div>`;
+  html += `<h3>Floor plans</h3><p class="hint" style="margin-top:0">Upload each floor's plan as a PDF (or image) and drag the rooms into place. Floors with a plan: ${Object.keys(CFG.floorplans||{}).map(esc).join(", ") || "none yet (showing sample layouts)"}.</p><button class="btn" data-setup="fp">🗺 Open floor plan editor</button>`;
+  html += `<h3>Rooms &amp; AC thermostats</h3><div class="tablewrap"><table class="ztab"><thead><tr><th>Name</th><th>Floor</th><th>Type</th><th>Capacity</th><th>AC kW</th><th>Thermostat ID</th><th>Protocol</th><th>Address</th><th></th></tr></thead><tbody id="zoneRows">${
+    CFG.zones.map(zoneRow).join("")}</tbody></table></div><button class="btn" data-setup="add" style="margin-top:8px">+ Add room</button>`;
+  html += `<h3>Socket circuits (plug loads)</h3><div class="tablewrap"><table class="ztab"><thead><tr><th>Room</th><th>Circuit</th><th>Type</th><th>Per desk</th><th>Active kW</th><th>Standby kW</th><th>Essential</th><th></th></tr></thead><tbody id="plugRows">${
+    CFG.plugs.map(plugRow).join("")}</tbody></table></div><button class="btn" data-setup="addplug" style="margin-top:8px">+ Add circuit</button>`;
+  $("#setupForm").innerHTML = html;
+  $("#setupErr").textContent = "";
+}
+function zoneRow(z){
+  return `<tr data-id="${esc(z.id)}"><td><input data-f="name" value="${esc(z.name)}"></td><td><input data-f="floor" value="${esc(z.floor||"")}"></td>
+    <td><select data-f="type">${Object.keys(TYPE_LABEL).map(t => `<option value="${t}" ${t===z.type?"selected":""}>${TYPE_LABEL[t]}</option>`).join("")}</select></td>
+    <td><input data-f="capacity" type="number" min="1" step="1" value="${z.capacity}"></td><td><input data-f="ratedKW" type="number" min="0.1" step="0.1" value="${z.ratedKW}"></td>
+    <td><input data-f="thermostatId" value="${esc(z.thermostatId||"")}"></td>
+    <td><select data-f="protocol">${PROTOCOLS.map(p => `<option ${p===z.protocol?"selected":""}>${p}</option>`).join("")}</select></td>
+    <td><input data-f="address" value="${esc(z.address||"")}"></td>
+    <td><button class="btn danger" data-setup="remove" aria-label="Remove">✕</button></td></tr>`;
+}
+function plugRow(c){
+  const zones = [...document.querySelectorAll("#zoneRows tr")].length ? [...document.querySelectorAll("#zoneRows tr")].map(tr => ({id:tr.dataset.id, name:tr.querySelector('[data-f="name"]').value})) : CFG.zones;
+  return `<tr data-id="${esc(c.id)}"><td><select data-f="zoneId">${zones.map(z => `<option value="${esc(z.id)}" ${z.id===c.zoneId?"selected":""}>${esc(z.name)}</option>`).join("")}</select></td>
+    <td><input data-f="name" value="${esc(c.name)}"></td>
+    <td><select data-f="type">${Object.keys(PLUG_TYPES).map(t => `<option value="${t}" ${t===c.type?"selected":""}>${PLUG_TYPES[t]}</option>`).join("")}</select></td>
+    <td style="text-align:center"><input data-f="perSeat" type="checkbox" ${c.perSeat?"checked":""}></td>
+    <td><input data-f="activeKW" type="number" min="0" step="0.01" value="${c.activeKW}"></td><td><input data-f="standbyKW" type="number" min="0" step="0.01" value="${c.standbyKW}"></td>
+    <td style="text-align:center"><input data-f="essential" type="checkbox" ${c.essential?"checked":""}></td>
+    <td><button class="btn danger" data-setup="remove" aria-label="Remove">✕</button></td></tr>`;
+}
+function saveSetup(){
+  const next = clone(CFG), err = $("#setupErr");
+  for(const inp of document.querySelectorAll("#setupForm [data-path]")){
+    if(inp.type==="checkbox"){ setPath(next, inp.dataset.path, inp.checked); continue; }
+    if(inp.type==="number"){ const v = parseFloat(inp.value); if(isNaN(v)){ err.textContent = "Please fill in every number."; inp.focus(); return; } setPath(next, inp.dataset.path, v); continue; }
+    setPath(next, inp.dataset.path, inp.value.trim());
+  }
+  next.workDays = [...document.querySelectorAll("#wdBoxes input:checked")].map(i => +i.value);
+  next.holidays = $("#holidays").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/); return m ? {date:m[1], name:m[2]} : null; }).filter(Boolean);
+  next.zones = [...document.querySelectorAll("#zoneRows tr")].map((tr,i) => {
+    const g = f => tr.querySelector(`[data-f="${f}"]`).value;
+    return { id:tr.dataset.id, name:g("name").trim()||"Unnamed room", floor:g("floor").trim()||"Main", type:g("type"),
+             capacity:Math.max(1, parseInt(g("capacity"))||1), ratedKW:Math.max(0.1, parseFloat(g("ratedKW"))||1),
+             thermostatId:g("thermostatId").trim()||("TSTAT-"+(i+1)), protocol:g("protocol"), address:g("address").trim()||String(1000+i) };
+  });
+  next.plugs = [...document.querySelectorAll("#plugRows tr")].map(tr => {
+    const g = f => tr.querySelector(`[data-f="${f}"]`), old = CFG.plugs.find(c => c.id===tr.dataset.id) || {};
+    return Object.assign({}, old, { id:tr.dataset.id, zoneId:g("zoneId").value, name:g("name").value.trim()||"Circuit", type:g("type").value,
+      perSeat:g("perSeat").checked, activeKW:Math.max(0, parseFloat(g("activeKW").value)||0), standbyKW:Math.max(0, parseFloat(g("standbyKW").value)||0), essential:g("essential").checked });
+  }).filter(c => next.zones.some(z => z.id===c.zoneId));
+  if(!next.zones.length){ err.textContent = "Add at least one room."; return; }
+  if(next.minSetpoint > next.maxSetpoint){ err.textContent = "Lowest setpoint must be below highest."; return; }
+  const modeChanged = next.controlMode !== CFG.controlMode;
+  CFG = next; saveConfig(); syncZones(); CFG.zones.forEach(z => { S.zones[z.id].cmdKey = ""; applyNow(z); });
+  CFG.plugs.forEach(c => applyPlug(c, periodOf(S.t), true));
+  $("#logInterval").value = String(CFG.logIntervalMins);
+  buildJump(); addAction(null, "Building setup updated" + (modeChanged ? ` · control mode: ${CFG.controlMode}` : ""), "info"); closeSetup(); render();
+}
+function openSetup(){ renderSetup(); $("#setup").hidden = false; }
+function closeSetup(){ $("#setup").hidden = true; }
+
+/* =====================================================================
+   7. EVENTS & MAIN LOOP
+   ===================================================================== */
+document.addEventListener("pointerdown", () => { S.hold = true; });
+document.addEventListener("pointerup", () => setTimeout(() => { S.hold = false; }, 60));
+document.addEventListener("pointercancel", () => { S.hold = false; });
+const refresh = () => { S.hold = false; render(); };
+
+function setTab(tab){
+  S.tab = tab;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab===tab));
+  document.querySelectorAll("[data-panel]").forEach(p => { p.hidden = p.dataset.panel!==tab; });
+  refresh();
+}
+function setMode(mode){
+  if(CFG.controlMode===mode) return;
+  CFG.controlMode = mode; saveConfig();
+  CFG.zones.forEach(z => { S.zones[z.id].cmdKey = ""; });
+  addAction(null, mode==="shadow" ? "👁 Switched to shadow mode: AI recommends only, thermostats and plugs return to the old schedule" : "● Switched to live control: AI commands are now sent to thermostats and smart plugs", "info");
+  refresh();
+}
+
+document.addEventListener("click", e => {
+  if(e.target.closest("#setup") || e.target.closest("#fpEditor")) return;
+  const q = sel => e.target.closest(sel);
+  let el;
+  if((el = q("[data-cact]"))){ caseAct(+el.dataset.case, el.dataset.cact); return refresh(); }
+  if((el = q("[data-pact]"))){
+    const c = CFG.plugs.find(p => p.id===el.dataset.plug), ps = S.plugs[c.id], z = zoneById(c.zoneId), a = el.dataset.pact;
+    if(a==="cut"){ ps.manual = "off"; ps.exemptDate = null; addAction(z, `🔌 ${c.name}: switched off manually`, "manual"); }
+    if(a==="on"){ ps.manual = "on"; addAction(z, `🔌 ${c.name}: locked on manually (flagged if left on in an empty room)`, "manual"); }
+    if(a==="keep"){ ps.manual = null; ps.forceCut = false; ps.exemptDate = simDate(); addAction(z, `🔌 ${c.name}: kept on until midnight`, "manual"); }
+    if(a==="ai"){ ps.manual = null; ps.forceCut = false; ps.exemptDate = null; addAction(z, `🔌 ${c.name}: returned to AI control`, "ai"); }
+    applyPlug(c, periodOf(S.t)); return refresh();
+  }
+  if((el = q("[data-pall]"))){
+    const a = el.dataset.pall;
+    if(a==="cutall"){ CFG.plugs.filter(c => !c.essential).forEach(c => { const ps = S.plugs[c.id]; ps.manual = null; ps.exemptDate = null; ps.forceCut = true; applyPlug(c, periodOf(S.t)); }); addAction(null, "⏻ Cut idle sockets now (rooms with people keep power)", "manual"); }
+    if(a==="keepall"){ CFG.plugs.filter(c => !c.essential).forEach(c => { const ps = S.plugs[c.id]; ps.manual = null; ps.forceCut = false; ps.exemptDate = simDate(); applyPlug(c, periodOf(S.t)); }); addAction(null, "☀ All sockets kept on until midnight", "manual"); }
+    if(a==="aitoggle"){ CFG.rules.aiPlugControl = !CFG.rules.aiPlugControl; saveConfig(); CFG.plugs.forEach(c => applyPlug(c, periodOf(S.t))); addAction(null, `AI plug control ${CFG.rules.aiPlugControl?"on":"off"}`, "info"); }
+    if(a==="leaktoggle"){ CFG.rules.aiLeakResponse = !CFG.rules.aiLeakResponse; saveConfig(); addAction(null, `AI leak response ${CFG.rules.aiLeakResponse?"automatic":"off (recommendations only)"}`, "info"); }
+    return refresh();
+  }
+  if((el = q("[data-sim]"))){
+    const z = zoneById(S.simZone) || CFG.zones[0], zs = S.zones[z.id], a = el.dataset.sim;
+    if(a==="door"){ zs.leak = 150; zs.leakFixAt = null; addAction(z, "🚪 (Simulated) A door was propped open", "manual"); }
+    if(a==="thermo"){ zs.auto = false; zs.override = 20; zs.overrideOn = true; applyNow(z); addAction(z, "🥶 (Simulated) An occupant turned the wall thermostat down to 20 °C", "manual"); }
+    if(a==="plugs"){ plugsIn(z.id).filter(c => !c.essential).forEach(c => { S.plugs[c.id].manual = "on"; applyPlug(c, periodOf(S.t)); }); addAction(z, "🔌 (Simulated) Appliances locked ON at the socket", "manual"); }
+    return refresh();
+  }
+  if((el = q("[data-mode]"))) return setMode(el.dataset.mode);
+  if((el = q("[data-fp]"))) return openFPE(el.dataset.fp==="upload");
+  if((el = q("[data-layout]"))){ S.layout = el.dataset.layout; return refresh(); }
+  if((el = q("[data-trace]"))){ S.traceZone = el.dataset.trace; return refresh(); }
+  if((el = q("[data-tab]"))) return setTab(el.dataset.tab);
+  if((el = q("[data-goto]"))) return setTab(el.dataset.goto);
+  if((el = q("[data-export]"))) return doExport(el.dataset.export);
+  if((el = q("[data-floor]"))){ S.floor = el.dataset.floor; return refresh(); }
+  if((el = q("#viewSeg [data-view]"))){ S.view = el.dataset.view; document.querySelectorAll("#viewSeg button").forEach(x => x.classList.toggle("on", x===el)); return refresh(); }
+  if((el = q("[data-act]"))){
+    const z = CFG.zones.find(z => z.id===S.selected), zs = S.zones[z.id], act = el.dataset.act;
+    if(act==="manual"){ zs.auto=false; zs.override = zs.acOn ? zs.setpoint : CFG.comfortSetpoint; zs.overrideOn = true; addAction(z, `Manual control taken at ${f1(zs.override)} °C`, "manual"); }
+    if(act==="up"){ zs.override = Math.min(30, zs.override+0.5); addAction(z, `Manual setpoint raised to ${f1(zs.override)} °C`, "manual"); }
+    if(act==="down"){ zs.override = Math.max(18, zs.override-0.5); addAction(z, `Manual setpoint lowered to ${f1(zs.override)} °C`, "manual"); }
+    if(act==="power"){ zs.overrideOn = !zs.overrideOn; addAction(z, zs.overrideOn ? "AC switched on manually" : "AC switched off manually", "manual"); }
+    if(act==="auto"){ zs.auto = true; addAction(z, "Returned to AI control", "ai"); }
+    applyNow(z); return refresh();
+  }
+  if((el = q("[data-zone]"))){
+    const z = zoneById(el.dataset.zone); S.selected = z.id; S.floor = z.floor||"Main";
+    if(el.dataset.go && S.tab!==el.dataset.go){ setTab(el.dataset.go); window.scrollTo({top:0, behavior:"smooth"}); }
+    else refresh();
+    if(window.innerWidth < 1000 && el.tagName==="BUTTON") $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+  }
+});
+document.addEventListener("keydown", e => {
+  if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches(".kpi[data-tab]")){ e.preventDefault(); setTab(e.target.dataset.tab); }
+  if(e.key==="Escape" && !$("#setup").hidden) closeSetup();
+  else if(e.key==="Escape" && !$("#fpEditor").hidden) closeFPE();
+});
+document.addEventListener("toggle", e => { const d = e.target; if(d.dataset && d.dataset.det) S.openDetails[d.dataset.det] = d.open; }, true);
+
+$("#speedSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  document.querySelectorAll("#speedSeg button").forEach(x => x.classList.toggle("on", x===b));
+  if(b.dataset.speed==="real"){ const n = new Date(); jumpTo(n.getHours()*60 + n.getMinutes()); S.speed = 1/60; }
+  else S.speed = parseFloat(b.dataset.speed);
+});
+$("#jump").addEventListener("change", e => { if(e.target.value!=="") jumpTo(parseInt(e.target.value)); e.target.value = ""; });
+$("#dayType").addEventListener("change", e => {
+  S.dayTypeOverride = e.target.value;
+  const wd = dayInfo().type==="workday";
+  CFG.zones.forEach(z => { const zs = S.zones[z.id]; if(z.type==="meeting"){ if(!wd) zs.meetings = []; else if(!zs.meetings.length) zs.meetings = genMeetings(z.capacity); } });
+  addAction(null, `📅 Today treated as: ${dayInfo().label} (resets at midnight)`, "info");
+  CFG.zones.forEach(applyNow); CFG.plugs.forEach(c => applyPlug(c, periodOf(S.t)));
+  refresh();
+});
+$("#heatwave").addEventListener("change", e => { S.heatwave = e.target.checked; addAction(null, S.heatwave ? "Hot day simulated (+4 °C outside)" : "Normal weather", "info"); refresh(); });
+$("#simZone").addEventListener("change", e => { S.simZone = e.target.value; });
+$("#traceZone").addEventListener("change", e => { S.traceZone = e.target.value; refresh(); });
+$("#logInterval").addEventListener("change", e => { CFG.logIntervalMins = parseInt(e.target.value); saveConfig(); });
+$("#closeBanner").addEventListener("click", () => $("#banner").remove());
+
+$("#openSetup").addEventListener("click", openSetup);
+$("#fpEditor").addEventListener("click", e => { const b = e.target.closest("[data-fpe]"); if(b && !b.disabled) fpeAction(b); });
+$("#fpFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; handleFloorFile(f); });
+$("#fpePage").addEventListener("change", async e => { setFpeMsg("Loading page…"); try{ await renderPdfPage(+e.target.value); }catch(err){ setFpeMsg("Couldn't load that page: " + err.message, true); } renderFPE(); });
+$("#fpeFloor").addEventListener("change", e => {
+  let f = e.target.value;
+  if(f==="__new"){ f = (prompt("Name of the new floor (e.g. Level 7):")||"").trim(); if(!f){ renderFPE(); return; } }
+  FPE.floor = f; FPE.drawing = null; FPE.active = null; setFpeMsg(""); renderFPE();
+});
+const fpeStage = $("#fpeStage");
+fpeStage.addEventListener("pointerdown", e => {
+  if(!fpePlan() || e.button > 0) return;
+  const pt = stagePt(e), boxEl = e.target.closest("[data-box]");
+  if(FPE.drawing){
+    FPE.drag = { mode:"draw", start:pt };
+    const t = $("#fpeTemp"); t.hidden = false; Object.assign(t.style, {left:pt.x+"%", top:pt.y+"%", width:"0%", height:"0%"});
+  } else if(boxEl){
+    const z = FPE.zones.find(q => q.id===boxEl.dataset.box); if(!z) return;
+    FPE.active = z.id; FPE.drag = { mode:"move", z, el:boxEl, start:pt, orig:Object.assign({}, z.plan) };
+  } else return;
+  fpeStage.setPointerCapture && fpeStage.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+fpeStage.addEventListener("pointermove", e => {
+  const d = FPE.drag; if(!d) return;
+  const pt = stagePt(e);
+  if(d.mode==="draw"){
+    const t = $("#fpeTemp");
+    Object.assign(t.style, {left:Math.min(pt.x,d.start.x)+"%", top:Math.min(pt.y,d.start.y)+"%", width:Math.abs(pt.x-d.start.x)+"%", height:Math.abs(pt.y-d.start.y)+"%"});
+  } else {
+    const p = d.z.plan, o = d.orig;
+    p.x = +clamp(o.x + pt.x - d.start.x, 0, 100 - o.w).toFixed(1); p.y = +clamp(o.y + pt.y - d.start.y, 0, 100 - o.h).toFixed(1);
+    d.el.style.left = p.x + "%"; d.el.style.top = p.y + "%";
+  }
+});
+function endStageDrag(e){
+  const d = FPE.drag; if(!d) return; FPE.drag = null;
+  if(d.mode==="draw"){
+    const pt = stagePt(e), t = $("#fpeTemp"); t.hidden = true;
+    const r = { x:+Math.min(pt.x,d.start.x).toFixed(1), y:+Math.min(pt.y,d.start.y).toFixed(1), w:+Math.abs(pt.x-d.start.x).toFixed(1), h:+Math.abs(pt.y-d.start.y).toFixed(1) };
+    const z = FPE.zones.find(q => q.id===FPE.drawing);
+    if(z && r.w >= 1.5 && r.h >= 1.5){
+      z.plan = r; z.floor = FPE.floor; FPE.drawing = null; FPE.dirty = true;
+      const next = FPE.zones.find(q => (q.floor||"Main")===FPE.floor && !q.plan);
+      setFpeMsg(`Placed ${z.name}.${next ? ` Next: click Draw next to ${next.name}.` : " All rooms on this floor are placed; click Save & apply."}`);
+    } else setFpeMsg("That box was too small. Drag a larger box over the room.", true);
+  } else if(d.z.plan.x!==d.orig.x || d.z.plan.y!==d.orig.y) FPE.dirty = true;
+  renderFPE();
+}
+fpeStage.addEventListener("pointerup", endStageDrag);
+fpeStage.addEventListener("pointercancel", e => { FPE.drag = null; const t = $("#fpeTemp"); if(t) t.hidden = true; });
+$("#setup").addEventListener("click", e => {
+  if(e.target.id==="setup") return closeSetup();
+  const b = e.target.closest("[data-setup]"); if(!b) return;
+  const a = b.dataset.setup;
+  if(a==="close") closeSetup();
+  if(a==="fp"){ closeSetup(); openFPE(false); }
+  if(a==="save") saveSetup();
+  if(a==="export") doExport("config");
+  if(a==="import") $("#importFile").click();
+  if(a==="add"){ const n = document.querySelectorAll("#zoneRows tr").length+1; $("#zoneRows").insertAdjacentHTML("beforeend", zoneRow({id:"z"+Date.now().toString(36), name:"New room", floor:S.floor||"Main", type:"office", capacity:10, ratedKW:3, thermostatId:"TSTAT-"+n, protocol:"BACnet/IP", address:String(9000+n)})); }
+  if(a==="addplug"){ const first = document.querySelector("#zoneRows tr"); $("#plugRows").insertAdjacentHTML("beforeend", plugRow({id:"p"+Date.now().toString(36), zoneId:first?first.dataset.id:"", name:"New circuit", type:"desk", activeKW:0.3, standbyKW:0.05})); }
+  if(a==="remove") b.closest("tr").remove();
+  if(a==="reset" && confirm("Reset the building setup to the default in the code?")){
+    try{ localStorage.removeItem(STORE_KEY); }catch(err){}
+    CFG = mergeConfig(DEFAULT_CONFIG, {}); S.cfgVer++; syncZones(); buildJump(); renderSetup(); render();
+  }
+});
+$("#importFile").addEventListener("change", e => {
+  const file = e.target.files[0]; if(!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const data = JSON.parse(rd.result);
+      if(!Array.isArray(data.zones) || !data.zones.length) throw new Error("No zones in file");
+      data.zones.forEach((z,i) => { z.id = z.id || "z"+i+Date.now().toString(36); z.type = TYPE_LABEL[z.type] ? z.type : "office"; });
+      (data.plugs||[]).forEach((c,i) => { c.id = c.id || "p"+i+Date.now().toString(36); });
+      CFG = mergeConfig(DEFAULT_CONFIG, data); saveConfig(); syncZones(); buildJump(); renderSetup(); render();
+      addAction(null, `Config imported for "${CFG.buildingName}"`, "info");
+    }catch(err){ $("#setupErr").textContent = "Couldn't read that file: " + err.message; }
+    e.target.value = "";
+  };
+  rd.readAsText(file);
+});
+window.addEventListener("resize", () => { if(S.tab==="overview") renderCharts(); });
+
+/* ---------- Start ---------- */
+syncZones();
+CFG.plugs.forEach(c => applyPlug(c, periodOf(0), true));
+while(S.t < sched().start - 40) stepMinute();       // warm up from midnight so charts have history
+if(DEMO && DEMO.acOverride && S.zones[DEMO.acOverride.zoneId]){
+  const z = zoneById(DEMO.acOverride.zoneId), zs = S.zones[z.id];
+  zs.auto = false; zs.override = DEMO.acOverride.setpoint; zs.overrideOn = true; applyNow(z);
+  addAction(z, `✋ An occupant set the wall thermostat to ${DEMO.acOverride.setpoint} °C and left the room`, "manual");
+}
+if(DEMO && DEMO.plugLock && S.plugs[DEMO.plugLock]){
+  const c = CFG.plugs.find(p => p.id===DEMO.plugLock);
+  S.plugs[c.id].manual = "on"; applyPlug(c, periodOf(S.t));
+  addAction(zoneById(c.zoneId), `🔌 ${c.name} set to “always on” by pantry staff`, "manual");
+}
+S.selected = CFG.zones[0].id;
+S.simZone = CFG.zones[0].id;
+$("#logInterval").value = String(CFG.logIntervalMins);
+buildJump();
+render();
+
+let last = performance.now();
+setInterval(() => {
+  const now = performance.now(), dt = (now-last)/1000; last = now;
+  S.acc += S.speed*dt;
+  let n = 0;
+  while(S.acc >= 1 && n < 120){ stepMinute(); S.acc -= 1; n++; }
+  if(n >= 120) S.acc = 0;
+  render();
+}, 250);
+</script>
+</body>
+</html>
